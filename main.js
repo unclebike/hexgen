@@ -30,14 +30,14 @@ window.addEventListener('resize', resize);
 // Initialize input
 initInput(canvas, getRenderParams);
 
-// Menu interaction handlers
-canvas.addEventListener('click', (e) => {
+// Shared handler for click/tap on menu and gameover
+function handleCanvasTap(clientX, clientY) {
   initAudio();
   resumeAudio();
 
   if (appState === 'menu') {
     const rect = canvas.getBoundingClientRect();
-    const mode = handleMenuClick(e.clientX - rect.left, e.clientY - rect.top);
+    const mode = handleMenuClick(clientX - rect.left, clientY - rect.top);
     if (mode) {
       startGame(mode);
     }
@@ -45,6 +45,21 @@ canvas.addEventListener('click', (e) => {
     appState = 'menu';
     resetMenu();
     stopDrone();
+  }
+}
+
+// Menu interaction handlers — click for desktop
+canvas.addEventListener('click', (e) => {
+  handleCanvasTap(e.clientX, e.clientY);
+});
+
+// Touch handler for menu/gameover — since touchstart preventDefault blocks click
+canvas.addEventListener('touchend', (e) => {
+  if (appState === 'menu' || appState === 'gameover') {
+    if (e.changedTouches.length === 1) {
+      const t = e.changedTouches[0];
+      handleCanvasTap(t.clientX, t.clientY);
+    }
   }
 });
 

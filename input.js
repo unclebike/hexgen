@@ -2,6 +2,7 @@
 // All inputs produce InputEvent objects queued for the game loop
 
 import { pixelToTriangle } from './grid.js';
+import { touchButtons } from './hud.js';
 
 const INPUT_QUEUE = [];
 const ROTATION_DEBOUNCE_MS = 125; // max 8 per second
@@ -124,13 +125,47 @@ export function initInput(canvas, getRenderParams) {
       const dy = t.clientY - touchStartPos.y;
       // Only treat as tap if finger didn't move much
       if (Math.sqrt(dx * dx + dy * dy) < 20) {
-        const { size, offsetX, offsetY } = getRenderParams();
         const rect = canvas.getBoundingClientRect();
-        const px = t.clientX - rect.left - offsetX;
-        const py = t.clientY - rect.top - offsetY;
-        const tri = pixelToTriangle(px, py, size);
-        if (tri) {
-          pushEvent({ type: 'moveCursor', target: { q: tri.q, r: tri.r }, timestamp: e.timeStamp });
+        const tapX = t.clientX - rect.left;
+        const tapY = t.clientY - rect.top;
+
+        // Check on-screen rotation buttons first
+        if (touchButtons.visible) {
+          const ccw = touchButtons.rotateCCW;
+          const cw = touchButtons.rotateCW;
+          const dCCW = Math.sqrt((tapX - ccw.x) ** 2 + (tapY - ccw.y) ** 2);
+          const dCW = Math.sqrt((tapX - cw.x) ** 2 + (tapY - cw.y) ** 2);
+          if (dCCW <= ccw.radius * 1.5) {
+            const now = performance.now();
+            if (now - lastRotationTime >= ROTATION_DEBOUNCE_MS) {
+              lastRotationTime = now;
+              pushEvent({ type: 'rotateCCW', timestamp: e.timeStamp });
+            }
+          } else if (dCW <= cw.radius * 1.5) {
+            const now = performance.now();
+            if (now - lastRotationTime >= ROTATION_DEBOUNCE_MS) {
+              lastRotationTime = now;
+              pushEvent({ type: 'rotateCW', timestamp: e.timeStamp });
+            }
+          } else {
+            // Not a button tap — move cursor
+            const { size, offsetX, offsetY } = getRenderParams();
+            const px = tapX - offsetX;
+            const py = tapY - offsetY;
+            const tri = pixelToTriangle(px, py, size);
+            if (tri) {
+              pushEvent({ type: 'moveCursor', target: { q: tri.q, r: tri.r }, timestamp: e.timeStamp });
+            }
+          }
+        } else {
+          // Buttons not visible — just move cursor
+          const { size, offsetX, offsetY } = getRenderParams();
+          const px = tapX - offsetX;
+          const py = tapY - offsetY;
+          const tri = pixelToTriangle(px, py, size);
+          if (tri) {
+            pushEvent({ type: 'moveCursor', target: { q: tri.q, r: tri.r }, timestamp: e.timeStamp });
+          }
         }
       }
     }

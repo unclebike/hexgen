@@ -2,6 +2,13 @@
 
 import { COLOR_PALETTE } from './progression.js';
 
+// On-screen rotation button positions (set during draw, read by input)
+export const touchButtons = {
+  rotateCCW: { x: 0, y: 0, radius: 0 },
+  rotateCW: { x: 0, y: 0, radius: 0 },
+  visible: false,
+};
+
 /**
  * Draw the HUD overlay onto the canvas.
  * @param {CanvasRenderingContext2D} ctx
@@ -58,6 +65,40 @@ export function drawHUD(ctx, state, width, height) {
   ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
   ctx.textAlign = 'right';
   ctx.fillText(`hexes: ${state.hexesCleared}`, width - 20, dotY + 20);
+
+  // On-screen rotation buttons (always visible, essential for touch)
+  const btnRadius = Math.min(32, width * 0.06);
+  const btnY = height - btnRadius - 24;
+  const btnMargin = btnRadius + 20;
+
+  // CCW button (left)
+  touchButtons.rotateCCW = { x: btnMargin, y: btnY, radius: btnRadius };
+  ctx.beginPath();
+  ctx.arc(btnMargin, btnY, btnRadius, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = `bold ${btnRadius}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.fillText('\u21BA', btnMargin, btnY);
+
+  // CW button (right)
+  touchButtons.rotateCW = { x: width - btnMargin, y: btnY, radius: btnRadius };
+  ctx.beginPath();
+  ctx.arc(width - btnMargin, btnY, btnRadius, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.fillText('\u21BB', width - btnMargin, btnY);
+
+  touchButtons.visible = true;
 
   ctx.restore();
 }
