@@ -1,0 +1,10 @@
+{
+  "name": "Dialhex",
+  "short_name": "Dialhex",
+  "description": "A hexagonal puzzle game",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0f0f23",
+  "theme_color": "#0f0f23"
+}
