@@ -1,15 +1,14 @@
 // gamestate.js — Game state manager
 // Processes inputs, manages state transitions, coordinates all game systems
 
-import { createBoard, getTrianglesInRadius, getAdjacentTriangles, getTriangle, triKey, triEqual, hexKey, getValidHexCoords, getBoardBounds } from './grid.js';
-import { computeRotation, applyRotation } from './rotation.js';
+import { createBoard, getValidHexCoords, getAdjacentTriangles, hexKey, isValidHex, getCentroidY, getHexNeighbors } from './grid.js';
+import { rotateHexCell } from './rotation.js';
 import { detectCompletedHexes, clearHexes } from './hexdetect.js';
 import { generateDrop, applyDrops, isGameOver } from './dropper.js';
 import { checkProgression, checkWinCondition, getInitialColors, getInitialDropInterval } from './progression.js';
 import { calculateScore, saveHighScore } from './scoring.js';
 
 const BOARD_RADIUS = 4;
-const HEX_SIZE = 30; // size used for rotation pixel math
 const CLEAR_DURATION = 500; // ms for clearing animation
 
 /**
@@ -18,7 +17,6 @@ const CLEAR_DURATION = 500; // ms for clearing animation
 export function createInitialState(mode = 'main') {
   const board = createBoard(BOARD_RADIUS);
   const activeColors = getInitialColors();
-  const centerTri = { q: 0, r: 0, triIndex: 0 };
 
   return {
     board,
@@ -31,11 +29,7 @@ export function createInitialState(mode = 'main') {
     activeColors,
     mode,
     phase: 'playing',
-    cursor: {
-      center: centerTri,
-      radius: 1,
-      selectedTriangles: getTrianglesInRadius(centerTri, 1, BOARD_RADIUS),
-    },
+    cursor: { q: 0, r: 0 },
     clearTimer: 0,
     pendingClears: [],
     startTime: Date.now(),
@@ -60,10 +54,6 @@ export function processInput(state, event) {
       return performRotation(state, -1);
     case 'moveCursor':
       return moveCursor(state, event.target);
-    case 'expandCursor':
-      return changeCursorRadius(state, 1);
-    case 'shrinkCursor':
-      return changeCursorRadius(state, -1);
     case 'pause':
       return { ...state, phase: 'paused' };
     default:
@@ -98,6 +88,25 @@ export function tick(state, dt) {
       newState.board = clearHexes(newState.board, newState.pendingClears);
       newState.pendingClears = [];
       newState.phase = 'playing';
+
+      // Apply gravity after clear
+      newState.board = settleBoard(newState.board);
+
+      // Check for chain clears after settling
+      const chainClears = detectCompletedHexes(newState.board, BOARD_RADIUS);
+      if (chainClears.length > 0) {
+        const points = calculateScore(chainClears.length, newState.level);
+        return {
+          ...newState,
+          phase: 'clearing',
+          clearTimer: CLEAR_DURATION,
+          pendingClears: chainClears,
+          score: newState.score + points,
+          hexesCleared: newState.hexesCleared + chainClears.length,
+          hexesThisLevel: newState.hexesThisLevel + chainClears.length,
+          justCleared: chainClears,
+        };
+      }
 
       // Check progression (new color?)
       newState = checkProgression(newState);
@@ -137,7 +146,10 @@ export function tick(state, dt) {
       newState.board = applyDrops(newState.board, drops);
       newState.justDropped = true;
 
-      // Check for completed hexes after drop
+      // Apply gravity after drop
+      newState.board = settleBoard(newState.board);
+
+      // Check for completed hexes after drop + settle
       newState = checkForClears(newState);
     }
   }
@@ -149,12 +161,8 @@ export function tick(state, dt) {
  * Perform a rotation and check for clears.
  */
 function performRotation(state, direction) {
-  const { center, selectedTriangles } = state.cursor;
-
-  const mappings = computeRotation(center, selectedTriangles, direction, HEX_SIZE, BOARD_RADIUS);
-  if (!mappings) return state; // Invalid rotation
-
-  const newBoard = applyRotation(state.board, mappings);
+  const { q, r } = state.cursor;
+  const newBoard = rotateHexCell(state.board, q, r, direction);
   let newState = { ...state, board: newBoard };
 
   // Check for clears after rotation
@@ -185,59 +193,78 @@ function checkForClears(state) {
 }
 
 /**
- * Move the cursor to a new center triangle.
+ * Move the cursor to a hex cell.
+ * target is {q, r} for a hex cell.
  */
 function moveCursor(state, target) {
   if (!target) return state;
-
-  // Validate target is on the board
-  const bounds = getBoardBounds(BOARD_RADIUS);
-  const isValid = bounds.some(b => triEqual(b, target));
-  if (!isValid) return state;
-
-  const selectedTriangles = getTrianglesInRadius(target, state.cursor.radius, BOARD_RADIUS);
+  if (!isValidHex(target.q, target.r, BOARD_RADIUS)) return state;
 
   return {
     ...state,
-    cursor: {
-      ...state.cursor,
-      center: target,
-      selectedTriangles,
-    },
+    cursor: { q: target.q, r: target.r },
   };
 }
 
 /**
- * Change cursor selection radius.
+ * Move cursor to adjacent hex in a direction.
+ * direction is 'up', 'down', 'left', 'right'
  */
-function changeCursorRadius(state, delta) {
-  const newRadius = Math.max(0, Math.min(3, state.cursor.radius + delta));
-  if (newRadius === state.cursor.radius) return state;
+export function moveCursorDirection(state, direction) {
+  if (state.phase !== 'playing') return state;
 
-  const selectedTriangles = getTrianglesInRadius(state.cursor.center, newRadius, BOARD_RADIUS);
+  const { q, r } = state.cursor;
+  const neighbors = getHexNeighbors(q, r, BOARD_RADIUS);
 
-  return {
-    ...state,
-    cursor: {
-      ...state.cursor,
-      radius: newRadius,
-      selectedTriangles,
-    },
+  const dirAngles = {
+    'right': 0,
+    'down': Math.PI / 2,
+    'left': Math.PI,
+    'up': -Math.PI / 2,
   };
+
+  const targetAngle = dirAngles[direction];
+  if (targetAngle === undefined) return state;
+
+  const SQRT3 = Math.sqrt(3);
+  let bestHex = null;
+  let bestDist = Infinity;
+
+  for (const n of neighbors) {
+    const dx = SQRT3 * (n.q - q) + (SQRT3 / 2) * (n.r - r);
+    const dy = 1.5 * (n.r - r);
+    const angle = Math.atan2(dy, dx);
+    let angleDiff = angle - targetAngle;
+    angleDiff = ((angleDiff + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+    const dist = Math.abs(angleDiff);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestHex = n;
+    }
+  }
+
+  if (bestHex) {
+    return { ...state, cursor: { q: bestHex.q, r: bestHex.r } };
+  }
+  return state;
 }
 
 /**
  * Activate a power-up at the cursor position.
  */
 export function activatePowerUp(state) {
-  const tri = getTriangle(state.board, state.cursor.center);
-  if (!tri || !tri.isPowerUp) return state;
+  const { q, r } = state.cursor;
+  const cell = state.board.get(hexKey(q, r));
+  if (!cell) return state;
+
+  const powerUpTri = cell.find(t => t.isPowerUp !== null);
+  if (!powerUpTri) return state;
 
   let newState = { ...state };
 
-  if (tri.isPowerUp === 'drain') {
+  if (powerUpTri.isPowerUp === 'drain') {
     newState = activateDrain(newState);
-  } else if (tri.isPowerUp === 'swap') {
+  } else if (powerUpTri.isPowerUp === 'swap') {
     newState = activateSwap(newState);
   }
 
@@ -253,7 +280,6 @@ function activateDrain(state) {
     newBoard.set(key, cell.map(t => ({ ...t })));
   }
 
-  // Get bottom edge cells
   const coords = getValidHexCoords(BOARD_RADIUS);
   const maxR = Math.max(...coords.map(c => c.r));
   const bottomCells = coords.filter(c => c.r === maxR);
@@ -299,4 +325,62 @@ function activateSwap(state) {
   return { ...state, board: newBoard };
 }
 
-export { BOARD_RADIUS, HEX_SIZE, CLEAR_DURATION };
+/**
+ * Apply gravity — settle all triangles downward until stable.
+ * Triangles fall to adjacent empty positions with higher y-coordinates.
+ */
+function settleBoard(board) {
+  const newBoard = new Map();
+  for (const [key, cell] of board) {
+    newBoard.set(key, cell.map(t => ({ ...t })));
+  }
+
+  // Pre-compute all triangle positions sorted by y (ascending = top first)
+  const allPositions = [];
+  const coords = getValidHexCoords(BOARD_RADIUS);
+  for (const { q, r } of coords) {
+    for (let i = 0; i < 6; i++) {
+      allPositions.push({ q, r, triIndex: i, y: getCentroidY({ q, r, triIndex: i }) });
+    }
+  }
+  allPositions.sort((a, b) => a.y - b.y);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const pos of allPositions) {
+      const cell = newBoard.get(hexKey(pos.q, pos.r));
+      const tri = cell[pos.triIndex];
+      if (tri.color === -1) continue;
+
+      const triID = { q: pos.q, r: pos.r, triIndex: pos.triIndex };
+      const neighbors = getAdjacentTriangles(triID, BOARD_RADIUS);
+
+      let bestNeighbor = null;
+      let bestDy = 0;
+
+      for (const n of neighbors) {
+        const nCell = newBoard.get(hexKey(n.q, n.r));
+        if (!nCell) continue;
+        if (nCell[n.triIndex].color !== -1) continue;
+
+        const dy = getCentroidY(n) - pos.y;
+        if (dy > 0.01 && dy > bestDy) {
+          bestDy = dy;
+          bestNeighbor = n;
+        }
+      }
+
+      if (bestNeighbor) {
+        const nCell = newBoard.get(hexKey(bestNeighbor.q, bestNeighbor.r));
+        nCell[bestNeighbor.triIndex] = { ...tri, id: bestNeighbor };
+        cell[pos.triIndex] = { id: triID, color: -1, isPowerUp: null, isGlowing: false };
+        changed = true;
+      }
+    }
+  }
+
+  return newBoard;
+}
+
+export { BOARD_RADIUS, CLEAR_DURATION };

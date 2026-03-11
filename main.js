@@ -1,19 +1,18 @@
 // main.js — Game loop orchestrator
 // Ties together all modules: state, rendering, input, audio
 
-import { createInitialState, processInput, tick, unpause, BOARD_RADIUS, HEX_SIZE } from './gamestate.js';
+import { createInitialState, processInput, tick, unpause, moveCursorDirection, BOARD_RADIUS } from './gamestate.js';
 import { initRenderer, renderFrame, resize, getRenderParams } from './renderer.js';
 import { AnimationManager } from './animations.js';
 import { drawHUD, drawGameOver, drawPause } from './hud.js';
 import { initInput, drainInputQueue } from './input.js';
-import { initAudio, resumeAudio, playSound, startDrone, stopDrone, toggleMute } from './audio.js';
+import { initAudio, resumeAudio, playSound, startDrone, stopDrone } from './audio.js';
 import { drawMenu, handleMenuClick, handleMenuHover, resetMenu } from './menu.js';
 import { saveHighScore } from './scoring.js';
 import { COLOR_PALETTE } from './progression.js';
 import { hexToPixel } from './grid.js';
-import { getAdjacentTriangles, triangleToPixel, triEqual } from './grid.js';
 
-// Game phases
+// App state
 let appState = 'menu'; // 'menu' | 'playing' | 'gameover'
 let gameState = null;
 let prevGameState = null;
@@ -33,7 +32,6 @@ initInput(canvas, getRenderParams);
 
 // Menu interaction handlers
 canvas.addEventListener('click', (e) => {
-  // Initialize audio on first click
   initAudio();
   resumeAudio();
 
@@ -44,7 +42,6 @@ canvas.addEventListener('click', (e) => {
       startGame(mode);
     }
   } else if (appState === 'gameover') {
-    // Return to menu
     appState = 'menu';
     resetMenu();
     stopDrone();
@@ -71,53 +68,10 @@ function startGame(mode) {
 }
 
 /**
- * Handle cursor movement by direction (from keyboard).
- */
-function handleDirectionalMove(state, direction) {
-  const { center } = state.cursor;
-  const adjacent = getAdjacentTriangles(center, BOARD_RADIUS);
-
-  // Map directions to approximate angles
-  const dirAngles = {
-    'up': -Math.PI / 2,
-    'down': Math.PI / 2,
-    'left': Math.PI,
-    'right': 0,
-  };
-
-  const targetAngle = dirAngles[direction];
-  if (targetAngle === undefined) return state;
-
-  const size = HEX_SIZE;
-  const centerPixel = triangleToPixel(center, size);
-
-  // Find the adjacent triangle closest to the desired direction
-  let bestTri = null;
-  let bestDist = Infinity;
-
-  for (const tri of adjacent) {
-    const triPixel = triangleToPixel(tri, size);
-    const dx = triPixel.x - centerPixel.x;
-    const dy = triPixel.y - centerPixel.y;
-    const angle = Math.atan2(dy, dx);
-    const angleDiff = Math.abs(((angle - targetAngle + Math.PI) % (2 * Math.PI)) - Math.PI);
-    if (angleDiff < bestDist) {
-      bestDist = angleDiff;
-      bestTri = tri;
-    }
-  }
-
-  if (bestTri) {
-    return processInput(state, { type: 'moveCursor', target: bestTri, timestamp: performance.now() });
-  }
-  return state;
-}
-
-/**
  * Main game loop.
  */
 function gameLoop(timestamp) {
-  const dt = lastTime ? Math.min(timestamp - lastTime, 50) : 16; // cap at 50ms
+  const dt = lastTime ? Math.min(timestamp - lastTime, 50) : 16;
   lastTime = timestamp;
 
   const w = canvas.width / (window.devicePixelRatio || 1);
@@ -147,7 +101,7 @@ function gameLoop(timestamp) {
       }
 
       if (event.type === 'moveCursorDir') {
-        gameState = handleDirectionalMove(gameState, event.direction);
+        gameState = moveCursorDirection(gameState, event.direction);
         continue;
       }
 
