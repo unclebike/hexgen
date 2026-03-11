@@ -165,6 +165,14 @@ function performRotation(state, direction) {
   const newBoard = rotateHexCell(state.board, q, r, direction);
   let newState = { ...state, board: newBoard };
 
+  // Debug: log cursor hex state after rotation
+  const cell = newBoard.get(hexKey(q, r));
+  if (cell) {
+    const colors = cell.map(t => t.color);
+    const filled = colors.filter(c => c >= 0);
+    console.log(`[ROTATE] Hex (${q},${r}) colors: [${colors}] (${filled.length}/6 filled)`);
+  }
+
   // Check for clears after rotation
   newState = checkForClears(newState);
 

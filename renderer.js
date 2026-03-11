@@ -129,9 +129,9 @@ function drawBoard(state) {
       }
       ctx.fill();
 
-      // Stroke
+      // Stroke — thicker lines on hex cell boundaries vs inner triangle edges
       ctx.strokeStyle = '#0a0a1a';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.5;
       ctx.stroke();
 
       // Power-up glow
@@ -142,6 +142,25 @@ function drawBoard(state) {
         ctx.stroke();
       }
     }
+  }
+
+  // Draw hex cell outlines to make boundaries visible
+  for (const { q, r } of coords) {
+    const verts = hexVertices(q, r, currentSize);
+    const screenVerts = verts.map(v => ({
+      x: v.x + offsetX,
+      y: v.y + offsetY,
+    }));
+
+    ctx.beginPath();
+    ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
+    for (let i = 1; i < 6; i++) {
+      ctx.lineTo(screenVerts[i].x, screenVerts[i].y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   }
 }
 

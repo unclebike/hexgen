@@ -256,12 +256,18 @@ export function setTriangle(board, triID, triangle) {
 
 /**
  * Get the top-edge hex cells (where new triangles drop in).
- * These are the cells with the smallest r values.
+ * Returns the topmost cell (minimum r) for each q column,
+ * covering the entire upper perimeter of the hex board.
  */
 export function getTopEdgeCells(radius = 4) {
   const coords = getValidHexCoords(radius);
-  const minR = Math.min(...coords.map(c => c.r));
-  return coords.filter(c => c.r === minR);
+  const topByQ = new Map();
+  for (const { q, r } of coords) {
+    if (!topByQ.has(q) || r < topByQ.get(q)) {
+      topByQ.set(q, r);
+    }
+  }
+  return [...topByQ.entries()].map(([q, r]) => ({ q, r }));
 }
 
 /**
