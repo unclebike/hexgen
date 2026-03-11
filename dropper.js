@@ -1,11 +1,14 @@
 // dropper.js — Triangle drop system
 // Generates new colored triangles at the top of the board
 
-import { getValidHexCoords, hexKey, getTopEdgeCells } from './grid.js';
+import { hexKey, getTopEdgeCells } from './grid.js';
+
+// Max triangles to drop per tick (prevents flooding)
+const MAX_DROP_PER_TICK = 3;
 
 /**
- * Generate a drop — fill empty triangles in the top-edge cells.
- * Returns new triangles to place (does not modify board).
+ * Generate a drop — add new colored triangles at the top of the board.
+ * Drops into the upper triangles (tri 4 and 5) of top-edge cells.
  * @param {Map} board - Current board state
  * @param {number[]} activeColors - Color indices currently in play
  * @param {number} radius - Board radius
@@ -13,25 +16,36 @@ import { getValidHexCoords, hexKey, getTopEdgeCells } from './grid.js';
  */
 export function generateDrop(board, activeColors, radius = 4) {
   const topCells = getTopEdgeCells(radius);
-  const drops = [];
   const hasPowerUp = boardHasPowerUp(board);
 
+  // Collect all empty top-entry positions
+  // tri 4 (upper-left) and tri 5 (upper-right) are the topmost within each cell
+  const emptyPositions = [];
   for (const { q, r } of topCells) {
     const cell = board.get(hexKey(q, r));
     if (!cell) continue;
-
-    // Only fill triangles in the top portion of the cell (triIndex 0, 1, 5 — upper half)
-    const topTriIndices = [0, 1, 5];
-    for (const i of topTriIndices) {
+    for (const i of [4, 5]) {
       if (cell[i].color === -1) {
-        const { color, isPowerUp } = generateTriangleContent(activeColors, hasPowerUp);
-        drops.push({
-          triID: { q, r, triIndex: i },
-          color,
-          isPowerUp,
-        });
+        emptyPositions.push({ q, r, triIndex: i });
       }
     }
+  }
+
+  if (emptyPositions.length === 0) return [];
+
+  // Drop into a random subset of empty positions
+  const dropCount = Math.min(MAX_DROP_PER_TICK, emptyPositions.length);
+  shuffleArray(emptyPositions);
+
+  const drops = [];
+  for (let d = 0; d < dropCount; d++) {
+    const pos = emptyPositions[d];
+    const { color, isPowerUp } = generateTriangleContent(activeColors, hasPowerUp && drops.every(dr => !dr.isPowerUp));
+    drops.push({
+      triID: pos,
+      color,
+      isPowerUp,
+    });
   }
 
   return drops;
@@ -91,17 +105,26 @@ function boardHasPowerUp(board) {
 }
 
 /**
- * Check if the game is over — top row completely full when a drop is needed.
+ * Check if the game is over — top entry positions are all full.
  */
 export function isGameOver(board, radius = 4) {
   const topCells = getTopEdgeCells(radius);
   for (const { q, r } of topCells) {
     const cell = board.get(hexKey(q, r));
     if (!cell) continue;
-    const topTriIndices = [0, 1, 5];
-    for (const i of topTriIndices) {
+    for (const i of [4, 5]) {
       if (cell[i].color === -1) return false;
     }
   }
   return true;
+}
+
+/**
+ * Fisher-Yates shuffle (in-place).
+ */
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
 }

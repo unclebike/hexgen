@@ -1,18 +1,19 @@
 // grid.js — Hexagonal grid data structure and coordinate math
 // Axial coordinate system (q, r) for a hex-of-hexes board
-// Each hex cell subdivided into 6 equilateral triangles (indices 0-5, CW from top-right)
+// Each hex cell subdivided into 6 equilateral triangles (indices 0-5, CW from right)
+// Pointy-top hex orientation: hexToPixel gives x = √3*q + √3/2*r, y = 3/2*r
 
 const SQRT3 = Math.sqrt(3);
 
 // The 6 axial direction vectors for hex neighbors
-// Index maps to triangle index direction: 0=NE, 1=N, 2=NW, 3=SW, 4=S, 5=SE
+// Index matches triangle index: tri i faces direction i, cross-hex neighbor at HEX_DIRECTIONS[i]
 const HEX_DIRECTIONS = [
-  { q: 1, r: -1 },  // 0: NE
-  { q: 0, r: -1 },  // 1: N
-  { q: -1, r: 0 },  // 2: NW
-  { q: -1, r: 1 },  // 3: SW
-  { q: 0, r: 1 },   // 4: S
-  { q: 1, r: 0 },   // 5: SE
+  { q: 1, r: 0 },   // 0: E  (right)       — tri 0 faces right
+  { q: 0, r: 1 },   // 1: SE (lower-right)  — tri 1 faces lower-right
+  { q: -1, r: 1 },  // 2: SW (lower-left)   — tri 2 faces lower-left
+  { q: -1, r: 0 },  // 3: W  (left)         — tri 3 faces left
+  { q: 0, r: -1 },  // 4: NW (upper-left)   — tri 4 faces upper-left
+  { q: 1, r: -1 },  // 5: NE (upper-right)  — tri 5 faces upper-right
 ];
 
 /**
@@ -76,6 +77,7 @@ export function createBoard(radius = 4) {
 
 /**
  * Get the pixel position of a hex cell center.
+ * Pointy-top orientation.
  */
 export function hexToPixel(q, r, size) {
   return {
@@ -86,18 +88,14 @@ export function hexToPixel(q, r, size) {
 
 /**
  * Get the pixel position of a triangle's centroid within its hex cell.
- * Triangle indices 0-5, clockwise from top-right.
- * Even indices (0,2,4) point outward (away from hex center), odd indices (1,3,5) point inward.
+ * Triangle indices 0-5, clockwise from right.
+ * tri 0=right(0°), 1=lower-right(60°), 2=lower-left(120°), 3=left(180°), 4=upper-left(240°), 5=upper-right(300°)
  */
 export function triangleToPixel(triID, size) {
   const { q, r, triIndex } = triID;
   const center = hexToPixel(q, r, size);
-  // Angle for triangle center: each triangle spans 60°, starting from 30° (top-right)
-  // Triangle i is centered at angle (60*i + 30) degrees... but let's be precise.
-  // The 6 triangles divide the hex. Their centroids are at 2/3 of the distance from
-  // hex center to the midpoint of each edge.
-  const angle = ((60 * triIndex) - 90) * (Math.PI / 180);
-  const dist = size * 0.5; // distance from hex center to triangle centroid
+  const angle = (60 * triIndex) * (Math.PI / 180);
+  const dist = size * 0.5;
   return {
     x: center.x + dist * Math.cos(angle),
     y: center.y + dist * Math.sin(angle),
@@ -107,17 +105,11 @@ export function triangleToPixel(triID, size) {
 /**
  * Get the 3 vertices of a triangle for rendering.
  * Each hex is divided into 6 equilateral triangles sharing the hex center.
- * Triangle i has vertices: hex center, hex vertex i, hex vertex (i+1)%6.
+ * Triangle i has vertices: hex center, hex vertex at (60*i - 30)°, hex vertex at (60*i + 30)°.
  */
 export function triangleVertices(triID, size) {
   const { q, r, triIndex } = triID;
   const center = hexToPixel(q, r, size);
-
-  // Hex vertices are at angles 0°, 60°, 120°, 180°, 240°, 300° from center
-  // Starting from the right (flat-top hex orientation... actually we use pointy-top)
-  // For pointy-top: vertices at 30°, 90°, 150°, 210°, 270°, 330°
-  // But our coordinate formula gives flat-top. Let's use flat-top:
-  // Vertices at 0°, 60°, 120°, 180°, 240°, 300°
 
   const vertexAngle1 = (60 * triIndex - 30) * (Math.PI / 180);
   const vertexAngle2 = (60 * triIndex + 30) * (Math.PI / 180);
@@ -135,7 +127,6 @@ export function triangleVertices(triID, size) {
  */
 export function pixelToTriangle(px, py, size, radius = 4) {
   // First find the hex cell
-  // Inverse of hexToPixel: q = (√3/3 * x - 1/3 * y) / size, r = (2/3 * y) / size
   const q_frac = ((SQRT3 / 3) * px - (1 / 3) * py) / size;
   const r_frac = ((2 / 3) * py) / size;
 
@@ -154,19 +145,18 @@ export function pixelToTriangle(px, py, size, radius = 4) {
   } else if (r_diff > s_diff) {
     r = -q - s;
   }
-  // s is implicit
 
   if (!isValidHex(q, r, radius)) return null;
 
-  // Now find which triangle within the hex
+  // Find which triangle within the hex
   const center = hexToPixel(q, r, size);
   const dx = px - center.x;
   const dy = py - center.y;
 
-  // Angle from center to point, mapped to triangle index
+  // Angle from center, mapped to triangle index
+  // tri 0 spans -30° to 30° (centered at 0°), so offset by +30 to align bucket boundaries
   let angle = Math.atan2(dy, dx) * (180 / Math.PI);
-  // Shift so triangle 0 starts at -120° to -60° (centered at -90°)
-  angle = ((angle + 120) % 360 + 360) % 360;
+  angle = ((angle + 30) % 360 + 360) % 360;
   const triIndex = Math.floor(angle / 60);
 
   return { q, r, triIndex: triIndex % 6 };
@@ -200,8 +190,6 @@ export function getAdjacentTriangles(triID, radius = 4) {
 
 /**
  * Get all TriangleIDs within a given radius of rings around a center triangle.
- * Radius 0 = just the center triangle.
- * Radius 1 = center + all adjacent triangles (and their adjacent, within 1 "step").
  * Uses BFS by triangle adjacency.
  */
 export function getTrianglesInRadius(center, radius, boardRadius = 4) {
@@ -283,6 +271,45 @@ export function getBottomEdgeCells(radius = 4) {
   const coords = getValidHexCoords(radius);
   const maxR = Math.max(...coords.map(c => c.r));
   return coords.filter(c => c.r === maxR);
+}
+
+/**
+ * Get the y-coordinate of a triangle's centroid (for gravity calculations).
+ * Uses unit size — only for relative comparisons.
+ */
+export function getCentroidY(triID) {
+  return 1.5 * triID.r + 0.5 * Math.sin(triID.triIndex * Math.PI / 3);
+}
+
+/**
+ * Get neighboring hex cells (for cursor movement between hexes).
+ */
+export function getHexNeighbors(q, r, radius = 4) {
+  const neighbors = [];
+  for (const dir of HEX_DIRECTIONS) {
+    const nq = q + dir.q;
+    const nr = r + dir.r;
+    if (isValidHex(nq, nr, radius)) {
+      neighbors.push({ q: nq, r: nr });
+    }
+  }
+  return neighbors;
+}
+
+/**
+ * Get the 6 outer vertices of a hex cell (for drawing hex outline).
+ */
+export function hexVertices(q, r, size) {
+  const center = hexToPixel(q, r, size);
+  const verts = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (60 * i - 30) * (Math.PI / 180);
+    verts.push({
+      x: center.x + size * Math.cos(angle),
+      y: center.y + size * Math.sin(angle),
+    });
+  }
+  return verts;
 }
 
 /**

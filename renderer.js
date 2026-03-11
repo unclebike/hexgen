@@ -1,13 +1,12 @@
 // renderer.js — Canvas rendering of board, triangles, and cursor
 
-import { getValidHexCoords, hexToPixel, triangleVertices, hexKey, getBoardBounds } from './grid.js';
+import { getValidHexCoords, hexToPixel, triangleVertices, hexKey, hexVertices } from './grid.js';
 import { COLOR_PALETTE, EMPTY_COLOR, BOARD_BG } from './progression.js';
-import { BOARD_RADIUS, HEX_SIZE } from './gamestate.js';
+import { BOARD_RADIUS } from './gamestate.js';
 
 let canvas, ctx;
 let offsetX = 0, offsetY = 0;
-let scale = 1;
-let currentSize = HEX_SIZE;
+let currentSize = 30;
 
 /**
  * Initialize the renderer with a canvas element.
@@ -35,7 +34,6 @@ export function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // Calculate hex size to fit the board in viewport
-  // Board spans roughly 2*radius hex widths horizontally
   const boardWidthHexes = 2 * BOARD_RADIUS + 1;
   const boardHeightHexes = 2 * BOARD_RADIUS + 1;
 
@@ -148,14 +146,14 @@ function drawBoard(state) {
 }
 
 /**
- * Draw cursor overlay on selected triangles.
+ * Draw cursor — highlight all 6 triangles in the cursor hex + hex outline.
  */
 function drawCursor(state) {
-  const { selectedTriangles, center } = state.cursor;
+  const { q, r } = state.cursor;
 
-  // Draw selection overlay
-  for (const tri of selectedTriangles) {
-    const verts = triangleVertices(tri, currentSize);
+  // Draw white overlay on all 6 triangles
+  for (let i = 0; i < 6; i++) {
+    const verts = triangleVertices({ q, r, triIndex: i }, currentSize);
     const screenVerts = verts.map(v => ({
       x: v.x + offsetX,
       y: v.y + offsetY,
@@ -167,20 +165,32 @@ function drawCursor(state) {
     ctx.lineTo(screenVerts[2].x, screenVerts[2].y);
     ctx.closePath();
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
   }
 
-  // Draw center dot
-  const centerVerts = triangleVertices(center, currentSize);
-  const cx = (centerVerts[0].x + centerVerts[1].x + centerVerts[2].x) / 3 + offsetX;
-  const cy = (centerVerts[0].y + centerVerts[1].y + centerVerts[2].y) / 3 + offsetY;
+  // Draw hex outline
+  const verts = hexVertices(q, r, currentSize);
+  const screenVerts = verts.map(v => ({
+    x: v.x + offsetX,
+    y: v.y + offsetY,
+  }));
 
   ctx.beginPath();
-  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
+  for (let i = 1; i < 6; i++) {
+    ctx.lineTo(screenVerts[i].x, screenVerts[i].y);
+  }
+  ctx.closePath();
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Center dot
+  const center = hexToPixel(q, r, currentSize);
+  ctx.beginPath();
+  ctx.arc(center.x + offsetX, center.y + offsetY, 3, 0, Math.PI * 2);
   ctx.fillStyle = 'white';
   ctx.fill();
 }
@@ -199,7 +209,6 @@ function drawClearingEffect(state, animations) {
         y: v.y + offsetY,
       }));
 
-      // Centroid for shrinking effect
       const cx = (screenVerts[0].x + screenVerts[1].x + screenVerts[2].x) / 3;
       const cy = (screenVerts[0].y + screenVerts[1].y + screenVerts[2].y) / 3;
 

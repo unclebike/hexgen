@@ -15,23 +15,15 @@ let lastRotationTime = 0;
 export function initInput(canvas, getRenderParams) {
   // ===== MOUSE =====
   canvas.addEventListener('click', (e) => {
-    if (e.shiftKey) {
-      pushEvent({ type: 'expandCursor', timestamp: e.timeStamp });
-      return;
-    }
     const { size, offsetX, offsetY } = getRenderParams();
     const rect = canvas.getBoundingClientRect();
     const px = e.clientX - rect.left - offsetX;
     const py = e.clientY - rect.top - offsetY;
     const tri = pixelToTriangle(px, py, size);
     if (tri) {
-      pushEvent({ type: 'moveCursor', target: tri, timestamp: e.timeStamp });
+      // Move cursor to the hex cell containing this triangle
+      pushEvent({ type: 'moveCursor', target: { q: tri.q, r: tri.r }, timestamp: e.timeStamp });
     }
-  });
-
-  canvas.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    pushEvent({ type: 'shrinkCursor', timestamp: e.timeStamp });
   });
 
   canvas.addEventListener('wheel', (e) => {
@@ -49,13 +41,11 @@ export function initInput(canvas, getRenderParams) {
   const keyMap = {
     'KeyQ': 'rotateCCW', 'KeyZ': 'rotateCCW',
     'KeyE': 'rotateCW', 'KeyX': 'rotateCW',
-    'Equal': 'expandCursor', 'NumpadAdd': 'expandCursor',
-    'Minus': 'shrinkCursor', 'NumpadSubtract': 'shrinkCursor',
     'Space': 'pause',
     'Escape': 'escape',
   };
 
-  // Direction keys map to cursor movement (handled specially)
+  // Direction keys map to cursor movement between hex cells
   const dirKeys = {
     'KeyW': 'up', 'ArrowUp': 'up',
     'KeyS': 'down', 'ArrowDown': 'down',
@@ -86,7 +76,6 @@ export function initInput(canvas, getRenderParams) {
   // ===== TOUCH =====
   let touchStartPos = null;
   let touchStartAngle = null;
-  let touchStartDist = null;
   let isTwoFinger = false;
 
   canvas.addEventListener('touchstart', (e) => {
@@ -99,7 +88,6 @@ export function initInput(canvas, getRenderParams) {
       const dx = e.touches[1].clientX - e.touches[0].clientX;
       const dy = e.touches[1].clientY - e.touches[0].clientY;
       touchStartAngle = Math.atan2(dy, dx);
-      touchStartDist = Math.sqrt(dx * dx + dy * dy);
     }
   }, { passive: false });
 
@@ -109,7 +97,6 @@ export function initInput(canvas, getRenderParams) {
       const dx = e.touches[1].clientX - e.touches[0].clientX;
       const dy = e.touches[1].clientY - e.touches[0].clientY;
       const angle = Math.atan2(dy, dx);
-      const dist = Math.sqrt(dx * dx + dy * dy);
 
       // Rotation detection: snap to 60° increments
       if (touchStartAngle !== null) {
@@ -124,18 +111,6 @@ export function initInput(canvas, getRenderParams) {
             });
             touchStartAngle = angle;
           }
-        }
-      }
-
-      // Pinch detection for cursor resize
-      if (touchStartDist !== null) {
-        const ratio = dist / touchStartDist;
-        if (ratio > 1.4) {
-          pushEvent({ type: 'expandCursor', timestamp: e.timeStamp });
-          touchStartDist = dist;
-        } else if (ratio < 0.7) {
-          pushEvent({ type: 'shrinkCursor', timestamp: e.timeStamp });
-          touchStartDist = dist;
         }
       }
     }
@@ -155,14 +130,13 @@ export function initInput(canvas, getRenderParams) {
         const py = t.clientY - rect.top - offsetY;
         const tri = pixelToTriangle(px, py, size);
         if (tri) {
-          pushEvent({ type: 'moveCursor', target: tri, timestamp: e.timeStamp });
+          pushEvent({ type: 'moveCursor', target: { q: tri.q, r: tri.r }, timestamp: e.timeStamp });
         }
       }
     }
     if (e.touches.length === 0) {
       touchStartPos = null;
       touchStartAngle = null;
-      touchStartDist = null;
       isTwoFinger = false;
     }
   }, { passive: false });
@@ -181,11 +155,4 @@ function pushEvent(event) {
 export function drainInputQueue() {
   const events = INPUT_QUEUE.splice(0);
   return events;
-}
-
-/**
- * Push a raw event (used by menu system).
- */
-export function pushRawEvent(event) {
-  INPUT_QUEUE.push(event);
 }
