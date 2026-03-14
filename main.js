@@ -5,7 +5,7 @@ import { createInitialState, processInput, tick, unpause, moveCursorDirection, B
 import { initRenderer, renderFrame, resize, getRenderParams } from './renderer.js';
 import { AnimationManager } from './animations.js';
 import { drawHUD, drawGameOver, drawPause, touchButtons } from './hud.js';
-import { initInput, drainInputQueue } from './input.js';
+import { initInput, drainInputQueue, setInputActive } from './input.js';
 import { initAudio, resumeAudio, playSound, startDrone, stopDrone } from './audio.js';
 import { drawMenu, handleMenuClick, handleMenuHover, resetMenu } from './menu.js';
 import { saveHighScore } from './scoring.js';
@@ -46,6 +46,7 @@ function handleCanvasTap(clientX, clientY) {
     resetMenu();
     stopDrone();
     touchButtons.visible = false;
+    setInputActive(false);
     drainInputQueue(); // discard stale events
   }
 }
@@ -60,16 +61,23 @@ canvas.addEventListener('click', (e) => {
   handleCanvasTap(e.clientX, e.clientY);
 });
 
-// Touch handler for menu/gameover — since touchstart preventDefault blocks click
+// Touch handler for menu/gameover — handles taps directly
+canvas.addEventListener('touchstart', (e) => {
+  if (appState === 'menu' || appState === 'gameover') {
+    e.preventDefault(); // prevent scroll and ghost click
+  }
+}, { passive: false });
+
 canvas.addEventListener('touchend', (e) => {
   if (appState === 'menu' || appState === 'gameover') {
+    e.preventDefault();
     lastMenuTouchTime = performance.now();
     if (e.changedTouches.length === 1) {
       const t = e.changedTouches[0];
       handleCanvasTap(t.clientX, t.clientY);
     }
   }
-});
+}, { passive: false });
 
 canvas.addEventListener('mousemove', (e) => {
   if (appState === 'menu') {
@@ -78,15 +86,31 @@ canvas.addEventListener('mousemove', (e) => {
   }
 });
 
+// Keyboard shortcuts for menu mode selection
+document.addEventListener('keydown', (e) => {
+  if (appState === 'menu') {
+    const modeKeys = { 'Digit1': 'main', 'Digit2': 'endless', 'Digit3': 'sprint' };
+    const mode = modeKeys[e.code];
+    if (mode) {
+      e.preventDefault();
+      initAudio();
+      resumeAudio();
+      startGame(mode);
+    }
+  }
+});
+
 /**
  * Start a new game.
  */
 function startGame(mode) {
+  drainInputQueue(); // clear any stale events from menu
   appState = 'playing';
   gameState = createInitialState(mode);
   prevGameState = null;
   animations = new AnimationManager();
   isNewHighScore = false;
+  setInputActive(true);
   startDrone(gameState.activeColors.length);
 }
 
@@ -111,6 +135,7 @@ function gameLoop(timestamp) {
         resetMenu();
         stopDrone();
         touchButtons.visible = false;
+        setInputActive(false);
         drainInputQueue(); // discard stale events
         requestAnimationFrame(gameLoop);
         return;

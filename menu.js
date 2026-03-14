@@ -87,8 +87,8 @@ export function drawMenu(ctx, width, height) {
   ctx.font = '11px monospace';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
   const controlY = height * 0.85;
-  ctx.fillText('scroll/QE: rotate | click/WASD: move cursor', width / 2, controlY);
-  ctx.fillText('touch: tap to move, two-finger twist to rotate', width / 2, controlY + 18);
+  ctx.fillText('click a mode or press 1/2/3 to start', width / 2, controlY);
+  ctx.fillText('scroll/QE: rotate | WASD: move | tap to play', width / 2, controlY + 18);
 
   return true;
 }
