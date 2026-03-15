@@ -208,6 +208,11 @@ function gameLoop(timestamp) {
       if (gameState.justDropped) {
         playSound('place', { colorIndex: gameState.activeColors[0] });
       }
+
+      // Gravity cascade animation
+      if (gameState.gravityMoves && gameState.gravityMoves.length > 0) {
+        animations.startGravityAnimation(gameState.gravityMoves);
+      }
     }
 
     // Update animations

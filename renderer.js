@@ -77,7 +77,7 @@ export function renderFrame(frame) {
   ctx.fillRect(-shakeX, -shakeY, w, h);
 
   // Draw board
-  drawBoard(state);
+  drawBoard(state, animations);
 
   // Draw cursor
   drawCursor(state);
@@ -98,7 +98,7 @@ export function renderFrame(frame) {
 /**
  * Draw all triangles on the board.
  */
-function drawBoard(state) {
+function drawBoard(state, animations) {
   const coords = getValidHexCoords(BOARD_RADIUS);
 
   for (const { q, r } of coords) {
@@ -114,6 +114,17 @@ function drawBoard(state) {
         x: v.x + offsetX,
         y: v.y + offsetY,
       }));
+
+      // Apply gravity cascade animation offset
+      if (animations) {
+        const gravOffset = animations.getTriangleOffset({ q, r, triIndex: i });
+        if (gravOffset) {
+          for (const v of screenVerts) {
+            v.x += gravOffset.dx * currentSize;
+            v.y += gravOffset.dy * currentSize;
+          }
+        }
+      }
 
       // Fill
       ctx.beginPath();

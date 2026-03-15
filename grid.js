@@ -288,6 +288,51 @@ export function getCentroidY(triID) {
 }
 
 /**
+ * Get the x-coordinate of a triangle's centroid (for gravity exit choice).
+ * Uses unit size — only for relative comparisons.
+ */
+export function getCentroidX(triID) {
+  return SQRT3 * triID.q + (SQRT3 / 2) * triID.r + 0.5 * Math.cos(triID.triIndex * Math.PI / 3);
+}
+
+/**
+ * Get gravity targets for a triangle — where it can fall to.
+ * Top tris (4,5) skip mid-row and fall directly to bottom tris (1,2).
+ * Mid tris (0,3) fall to their adjacent bottom tri.
+ * Bottom tris (1,2) exit to the next hex below via cross-hex boundary.
+ * Returns array of possible target triIDs (filtered to valid board positions).
+ */
+export function getGravityTargets(triID, radius = 4) {
+  const { q, r, triIndex } = triID;
+  let targets;
+
+  switch (triIndex) {
+    case 4: // top-left → can fall to either bottom tri
+      targets = [{ q, r, triIndex: 2 }, { q, r, triIndex: 1 }];
+      break;
+    case 5: // top-right → can fall to either bottom tri
+      targets = [{ q, r, triIndex: 1 }, { q, r, triIndex: 2 }];
+      break;
+    case 3: // mid-left → falls to bottom-left
+      targets = [{ q, r, triIndex: 2 }];
+      break;
+    case 0: // mid-right → falls to bottom-right
+      targets = [{ q, r, triIndex: 1 }];
+      break;
+    case 1: // bottom-right → exits SE to next hex
+      targets = [{ q, r: r + 1, triIndex: 4 }];
+      break;
+    case 2: // bottom-left → exits SW to next hex
+      targets = [{ q: q - 1, r: r + 1, triIndex: 5 }];
+      break;
+    default:
+      targets = [];
+  }
+
+  return targets.filter(t => isValidHex(t.q, t.r, radius));
+}
+
+/**
  * Get neighboring hex cells (for cursor movement between hexes).
  */
 export function getHexNeighbors(q, r, radius = 4) {

@@ -1,7 +1,7 @@
 // gamestate.js — Game state manager
 // Processes inputs, manages state transitions, coordinates all game systems
 
-import { createBoard, getValidHexCoords, getAdjacentTriangles, hexKey, isValidHex, getCentroidY, getHexNeighbors } from './grid.js';
+import { createBoard, getValidHexCoords, getAdjacentTriangles, hexKey, isValidHex, getCentroidY, getCentroidX, getGravityTargets, getHexNeighbors } from './grid.js';
 import { rotateHexCell } from './rotation.js';
 import { detectCompletedHexes, clearHexes } from './hexdetect.js';
 import { generateDrop, applyDrops, isGameOver } from './dropper.js';
@@ -78,7 +78,7 @@ export function unpause(state) {
 export function tick(state, dt) {
   if (state.phase === 'paused' || state.phase === 'gameover') return state;
 
-  let newState = { ...state, leveledUp: false, justCleared: [], justDropped: false };
+  let newState = { ...state, leveledUp: false, justCleared: [], justDropped: false, gravityMoves: null };
 
   // Handle clearing phase
   if (newState.phase === 'clearing') {
@@ -90,7 +90,11 @@ export function tick(state, dt) {
       newState.phase = 'playing';
 
       // Apply gravity after clear
-      newState.board = settleBoard(newState.board);
+      const { board: settledBoard, moveLog } = settleBoard(newState.board);
+      newState.board = settledBoard;
+      if (moveLog.length > 0) {
+        newState.gravityMoves = moveLog;
+      }
 
       // Check for chain clears after settling
       const chainClears = detectCompletedHexes(newState.board, BOARD_RADIUS);
@@ -147,7 +151,11 @@ export function tick(state, dt) {
       newState.justDropped = true;
 
       // Apply gravity after drop
-      newState.board = settleBoard(newState.board);
+      const { board: settledBoard, moveLog } = settleBoard(newState.board);
+      newState.board = settledBoard;
+      if (moveLog.length > 0) {
+        newState.gravityMoves = moveLog;
+      }
 
       // Check for completed hexes after drop + settle
       newState = checkForClears(newState);
@@ -335,7 +343,10 @@ function activateSwap(state) {
 
 /**
  * Apply gravity — settle all triangles downward until stable.
- * Triangles fall to adjacent empty positions with higher y-coordinates.
+ * Uses getGravityTargets for vertical fall paths (top→bottom within hex,
+ * then cross-hex to the hex below, choosing exit that minimizes x-drift).
+ * Returns { board, moveLog } where moveLog is an array of passes,
+ * each pass an array of {from, to} moves for animation.
  */
 function settleBoard(board) {
   const newBoard = new Map();
@@ -343,7 +354,7 @@ function settleBoard(board) {
     newBoard.set(key, cell.map(t => ({ ...t })));
   }
 
-  // Pre-compute all triangle positions sorted by y (ascending = top first)
+  // Pre-compute all triangle positions sorted by y ascending (top first)
   const allPositions = [];
   const coords = getValidHexCoords(BOARD_RADIUS);
   for (const { q, r } of coords) {
@@ -353,42 +364,65 @@ function settleBoard(board) {
   }
   allPositions.sort((a, b) => a.y - b.y);
 
+  const moveLog = [];
   let changed = true;
   while (changed) {
     changed = false;
+    const passMoves = [];
+    // Track pieces that just landed this pass — don't let them move again
+    const justLanded = new Set();
+
     for (const pos of allPositions) {
+      const posKey = `${pos.q},${pos.r},${pos.triIndex}`;
+      if (justLanded.has(posKey)) continue;
+
       const cell = newBoard.get(hexKey(pos.q, pos.r));
       const tri = cell[pos.triIndex];
       if (tri.color === -1) continue;
 
       const triID = { q: pos.q, r: pos.r, triIndex: pos.triIndex };
-      const neighbors = getAdjacentTriangles(triID, BOARD_RADIUS);
+      const targets = getGravityTargets(triID, BOARD_RADIUS);
 
-      let bestNeighbor = null;
-      let bestDy = 0;
+      // Filter to empty targets (also skip positions just vacated by another piece
+      // that hasn't re-landed yet — but the board state handles this since we update in-place)
+      const emptyTargets = targets.filter(t => {
+        const tCell = newBoard.get(hexKey(t.q, t.r));
+        return tCell && tCell[t.triIndex].color === -1;
+      });
 
-      for (const n of neighbors) {
-        const nCell = newBoard.get(hexKey(n.q, n.r));
-        if (!nCell) continue;
-        if (nCell[n.triIndex].color !== -1) continue;
+      if (emptyTargets.length === 0) continue;
 
-        const dy = getCentroidY(n) - pos.y;
-        if (dy > 0.01 && dy > bestDy) {
-          bestDy = dy;
-          bestNeighbor = n;
+      // Pick target: if multiple (top tris have 2 options), choose closest x
+      let bestTarget;
+      if (emptyTargets.length === 1) {
+        bestTarget = emptyTargets[0];
+      } else {
+        const curX = getCentroidX(triID);
+        let bestDx = Infinity;
+        for (const t of emptyTargets) {
+          const dx = Math.abs(getCentroidX(t) - curX);
+          if (dx < bestDx) {
+            bestDx = dx;
+            bestTarget = t;
+          }
         }
       }
 
-      if (bestNeighbor) {
-        const nCell = newBoard.get(hexKey(bestNeighbor.q, bestNeighbor.r));
-        nCell[bestNeighbor.triIndex] = { ...tri, id: bestNeighbor };
-        cell[pos.triIndex] = { id: triID, color: -1, isPowerUp: null, isGlowing: false };
-        changed = true;
-      }
+      // Move the piece
+      const tCell = newBoard.get(hexKey(bestTarget.q, bestTarget.r));
+      tCell[bestTarget.triIndex] = { ...tri, id: bestTarget };
+      cell[pos.triIndex] = { id: triID, color: -1, isPowerUp: null, isGlowing: false };
+      passMoves.push({ from: { ...triID }, to: { ...bestTarget } });
+      justLanded.add(`${bestTarget.q},${bestTarget.r},${bestTarget.triIndex}`);
+      changed = true;
+    }
+
+    if (passMoves.length > 0) {
+      moveLog.push(passMoves);
     }
   }
 
-  return newBoard;
+  return { board: newBoard, moveLog };
 }
 
 export { BOARD_RADIUS, CLEAR_DURATION };
