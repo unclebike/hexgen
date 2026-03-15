@@ -1,4 +1,6 @@
-// animations.js — Visual effects: particles, screen shake, rotation animation
+// animations.js — Visual effects: particles, screen shake, rotation animation, gravity cascade
+
+import { triangleToPixel, triEqual } from './grid.js';
 
 /**
  * Animation manager — tracks and updates all active visual effects.
@@ -9,6 +11,9 @@ export class AnimationManager {
     this.shakeTimer = 0;
     this.shakeIntensity = 0;
     this.rotationAnim = null;
+    this.gravityAnims = [];
+    this.gravityAnimElapsed = 0;
+    this.gravityAnimTotal = 0;
   }
 
   /**
@@ -35,6 +40,16 @@ export class AnimationManager {
       this.rotationAnim.elapsed += dt;
       if (this.rotationAnim.elapsed >= this.rotationAnim.duration) {
         this.rotationAnim = null;
+      }
+    }
+
+    // Update gravity cascade animation
+    if (this.gravityAnimTotal > 0) {
+      this.gravityAnimElapsed += dt;
+      if (this.gravityAnimElapsed >= this.gravityAnimTotal) {
+        this.gravityAnims = [];
+        this.gravityAnimTotal = 0;
+        this.gravityAnimElapsed = 0;
       }
     }
   }
@@ -102,6 +117,61 @@ export class AnimationManager {
     const t = this.rotationAnim.elapsed / this.rotationAnim.duration;
     // Ease-out
     return 1 - (1 - t) * (1 - t);
+  }
+
+  /**
+   * Start a gravity cascade animation from a moveLog.
+   * Each pass in moveLog is animated sequentially, with stepDuration ms per pass.
+   * @param {Array<Array<{from, to}>>} moveLog - passes of gravity moves
+   * @param {number} stepDuration - ms per gravity step (controls cascade speed)
+   */
+  startGravityAnimation(moveLog, stepDuration = 60) {
+    this.gravityAnims = [];
+    for (let pass = 0; pass < moveLog.length; pass++) {
+      for (const move of moveLog[pass]) {
+        this.gravityAnims.push({
+          from: move.from,
+          to: move.to,
+          startTime: pass * stepDuration,
+          duration: stepDuration,
+        });
+      }
+    }
+    this.gravityAnimElapsed = 0;
+    this.gravityAnimTotal = moveLog.length * stepDuration;
+  }
+
+  /**
+   * Get the pixel offset for a triangle currently being animated by gravity.
+   * Returns {dx, dy} in unit-size coordinates, or null if not animating.
+   * The renderer multiplies by currentSize to get screen pixels.
+   */
+  getTriangleOffset(triID) {
+    if (!this.gravityAnims.length) return null;
+
+    for (const anim of this.gravityAnims) {
+      if (triEqual(anim.to, triID)) {
+        const t = (this.gravityAnimElapsed - anim.startTime) / anim.duration;
+        if (t >= 0 && t < 1) {
+          // Interpolate from 'from' position toward 'to' position
+          const fromPx = triangleToPixel(anim.from, 1);
+          const toPx = triangleToPixel(anim.to, 1);
+          const ease = 1 - (1 - t) * (1 - t); // ease-out quadratic
+          return {
+            dx: (fromPx.x - toPx.x) * (1 - ease),
+            dy: (fromPx.y - toPx.y) * (1 - ease),
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Whether a gravity cascade animation is currently playing.
+   */
+  isGravityAnimating() {
+    return this.gravityAnimTotal > 0;
   }
 
   /**

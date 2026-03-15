@@ -256,12 +256,18 @@ export function setTriangle(board, triID, triangle) {
 
 /**
  * Get the top-edge hex cells (where new triangles drop in).
- * These are the cells with the smallest r values.
+ * Returns the topmost cell (minimum r) for each q column,
+ * covering the entire upper perimeter of the hex board.
  */
 export function getTopEdgeCells(radius = 4) {
   const coords = getValidHexCoords(radius);
-  const minR = Math.min(...coords.map(c => c.r));
-  return coords.filter(c => c.r === minR);
+  const topByQ = new Map();
+  for (const { q, r } of coords) {
+    if (!topByQ.has(q) || r < topByQ.get(q)) {
+      topByQ.set(q, r);
+    }
+  }
+  return [...topByQ.entries()].map(([q, r]) => ({ q, r }));
 }
 
 /**
@@ -279,6 +285,51 @@ export function getBottomEdgeCells(radius = 4) {
  */
 export function getCentroidY(triID) {
   return 1.5 * triID.r + 0.5 * Math.sin(triID.triIndex * Math.PI / 3);
+}
+
+/**
+ * Get the x-coordinate of a triangle's centroid (for gravity exit choice).
+ * Uses unit size — only for relative comparisons.
+ */
+export function getCentroidX(triID) {
+  return SQRT3 * triID.q + (SQRT3 / 2) * triID.r + 0.5 * Math.cos(triID.triIndex * Math.PI / 3);
+}
+
+/**
+ * Get gravity targets for a triangle — where it can fall to.
+ * Top tris (4,5) skip mid-row and fall directly to bottom tris (1,2).
+ * Mid tris (0,3) fall to their adjacent bottom tri.
+ * Bottom tris (1,2) exit to the next hex below via cross-hex boundary.
+ * Returns array of possible target triIDs (filtered to valid board positions).
+ */
+export function getGravityTargets(triID, radius = 4) {
+  const { q, r, triIndex } = triID;
+  let targets;
+
+  switch (triIndex) {
+    case 4: // top-left → can fall to either bottom tri
+      targets = [{ q, r, triIndex: 2 }, { q, r, triIndex: 1 }];
+      break;
+    case 5: // top-right → can fall to either bottom tri
+      targets = [{ q, r, triIndex: 1 }, { q, r, triIndex: 2 }];
+      break;
+    case 3: // mid-left → falls to bottom-left
+      targets = [{ q, r, triIndex: 2 }];
+      break;
+    case 0: // mid-right → falls to bottom-right
+      targets = [{ q, r, triIndex: 1 }];
+      break;
+    case 1: // bottom-right → exits SE to next hex
+      targets = [{ q, r: r + 1, triIndex: 4 }];
+      break;
+    case 2: // bottom-left → exits SW to next hex
+      targets = [{ q: q - 1, r: r + 1, triIndex: 5 }];
+      break;
+    default:
+      targets = [];
+  }
+
+  return targets.filter(t => isValidHex(t.q, t.r, radius));
 }
 
 /**

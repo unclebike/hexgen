@@ -29,6 +29,7 @@ export function detectCompletedHexes(board, radius = 4) {
     }
 
     if (allSame) {
+      console.log(`[CLEAR] Hex (${q},${r}) completed with color ${firstColor}!`);
       completed.push({
         hexCoord: { q, r },
         color: firstColor,
