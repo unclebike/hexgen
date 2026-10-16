@@ -57,7 +57,6 @@ export function update(game, dt) {
 
   // Finished clears leave holes for the triangles above to fall into
   for (const [k, p] of game.board) {
-    if (p.holdT > 0) p.holdT -= dt;
     if (p.clearT > 0) {
       p.clearT -= dt;
       if (p.clearT <= 0) game.board.delete(k);
@@ -74,7 +73,7 @@ export function update(game, dt) {
     }
     game.fallTimer -= FALL_STEP;
     game.tick++;
-    stepGravity(game.board);
+    stepGravity(game.board, heldCells(game));
 
     game.spawnTimer -= FALL_STEP;
     if (game.spawnTimer <= 0) {
@@ -93,7 +92,9 @@ export function update(game, dt) {
 }
 
 function detectClears(game, events) {
-  const hexes = findHexes(game.board, (r, c) => isResting(game.board, r, c));
+  // A hex counts once its triangles are still: landed, or held by the dial
+  const held = heldCells(game);
+  const hexes = findHexes(game.board, (r, c) => held.has(key(r, c)) || isResting(game.board, r, c));
   if (hexes.length === 0) return;
 
   const powers = [];
@@ -149,15 +150,22 @@ function endGame(game, events) {
   events.push({ type: 'gameover', won: game.won, newHighScore: saveHighScore(game.mode, game.score) });
 }
 
+/**
+ * The six cells under the dial. Gravity is suspended there, so the player
+ * can turn a hex without its triangles falling away; moving the dial off
+ * them lets them fall.
+ */
+function heldCells(game) {
+  return new Set(dialCells(game.cursor.k, game.cursor.j).map(({ r, c }) => key(r, c)));
+}
+
 /** Turn the dial. dir: 1 = clockwise, -1 = counter-clockwise. */
 export function rotate(game, dir) {
   if (game.phase !== 'playing') return [];
   const { k, j } = game.cursor;
   if (!rotateDial(game.board, k, j, dir)) return [];
-  // Hold the turned triangles still until the turn has played out, so they
-  // don't fall mid-swing; only these pieces are drawn swinging.
+  // Only the turned pieces are drawn swinging
   const pieces = dialCells(k, j).map(({ r, c }) => game.board.get(key(r, c))).filter(Boolean);
-  for (const p of pieces) p.holdT = ROTATE_TIME;
   game.rotAnim = { k, j, dir, t: 0, pieces: new Set(pieces) };
   return [{ type: 'rotate' }];
 }

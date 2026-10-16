@@ -53,17 +53,20 @@ export function isResting(board, r, c) {
 
 /**
  * Move every loose piece one step. Mutates the board.
+ * `held` is a set of cell keys whose pieces don't fall: the six cells under
+ * the dial. Pieces from outside can still fall into an empty held cell, and
+ * are held from then on.
  * Each piece records where it came from, so the renderer can animate the move.
  */
-export function stepGravity(board) {
+export function stepGravity(board, held) {
   for (const p of board.values()) p.from = null;
 
   // Bottom of each column first, so a falling stack moves together
   const order = [...CELLS].sort((a, b) => b.c - a.c);
   for (const { r, c } of order) {
     const p = board.get(key(r, c));
-    // Skip pieces that already moved this step, are clearing, or are mid-turn
-    if (!p || p.from || p.clearT > 0 || p.holdT > 0) continue;
+    // Skip pieces that already moved this step, are clearing, or are held
+    if (!p || p.from || p.clearT > 0 || held.has(key(r, c))) continue;
     const move = nextMove(board, r, c);
     if (!move) continue;
     board.delete(key(r, c));
