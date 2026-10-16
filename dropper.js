@@ -1,130 +1,95 @@
-// dropper.js — Triangle drop system
-// Generates new colored triangles at the top of the board
+// dropper.js — Triangles raining into the bin, and falling once they're in
+//
+// A triangle can't flip as it falls, so it moves diagonally one row at a time,
+// (r, c) → (r+1, c±1), which keeps its orientation. It alternates left and
+// right, so in open space it zig-zags straight down. A triangle that can't
+// fall slides along its row toward the nearest spot where it can, so the bin
+// fills level instead of piling up in the middle. It rests once it can do
+// neither.
 
-import { hexKey, getTopEdgeCells } from './grid.js';
+import { ROWS, CELLS, TOP_CELLS, isCell, key } from './grid.js';
 
-// Max triangles to drop per tick (prevents flooding)
-const MAX_DROP_PER_TICK = 3;
+const POWER_CHANCE = 0.04;
+const rows = Array.from({ length: ROWS }, (_, r) => CELLS.filter(cell => cell.r === r));
+
+const isOpen = (board, r, c) => isCell(r, c) && !board.has(key(r, c));
+const canDrop = (board, r, c, dir) => isOpen(board, r + 1, c + dir);
 
 /**
- * Generate a drop — add new colored triangles at the top of the board.
- * Drops into the upper triangles (tri 4 and 5) of top-edge cells.
- * @param {Map} board - Current board state
- * @param {number[]} activeColors - Color indices currently in play
- * @param {number} radius - Board radius
- * @returns {Array<{triID, color, isPowerUp}>} - New triangles to place
+ * Where the piece at (r, c) moves next, or null if it's resting.
+ * Prefers falling (toward `zig` first), then sliding sideways toward the
+ * nearest open drop along its row.
  */
-export function generateDrop(board, activeColors, radius = 4) {
-  const topCells = getTopEdgeCells(radius);
-  const hasPowerUp = boardHasPowerUp(board);
-
-  // Collect all empty top-entry positions
-  // tri 4 (upper-left) and tri 5 (upper-right) are the topmost within each cell
-  const emptyPositions = [];
-  for (const { q, r } of topCells) {
-    const cell = board.get(hexKey(q, r));
-    if (!cell) continue;
-    for (const i of [4, 5]) {
-      if (cell[i].color === -1) {
-        emptyPositions.push({ q, r, triIndex: i });
+function nextMove(board, r, c, zig) {
+  for (const dir of [zig, -zig]) {
+    if (canDrop(board, r, c, dir)) return { r: r + 1, c: c + dir, dir };
+  }
+  // Same-orientation neighbours along the row are two columns apart
+  for (let dist = 2; dist < 4 * ROWS; dist += 2) {
+    for (const dir of [zig, -zig]) {
+      const nc = c + dir * dist;
+      if (!isOpen(board, r, nc)) continue;
+      // The path to it must be clear too
+      let clear = true;
+      for (let d = 2; d < dist; d += 2) {
+        if (!isOpen(board, r, c + dir * d)) { clear = false; break; }
+      }
+      if (clear && (canDrop(board, r, nc, -1) || canDrop(board, r, nc, 1))) {
+        return { r, c: c + dir * 2, dir };
       }
     }
   }
+  return null;
+}
 
-  if (emptyPositions.length === 0) return [];
-
-  // Drop into a random subset of empty positions
-  const dropCount = Math.min(MAX_DROP_PER_TICK, emptyPositions.length);
-  shuffleArray(emptyPositions);
-
-  const drops = [];
-  for (let d = 0; d < dropCount; d++) {
-    const pos = emptyPositions[d];
-    const { color, isPowerUp } = generateTriangleContent(activeColors, hasPowerUp && drops.every(dr => !dr.isPowerUp));
-    drops.push({
-      triID: pos,
-      color,
-      isPowerUp,
-    });
-  }
-
-  return drops;
+/** A piece is resting when it has nowhere to fall or slide. */
+export function isResting(board, r, c) {
+  return nextMove(board, r, c, 1) === null;
 }
 
 /**
- * Apply drops to the board — returns new board.
+ * Move every loose piece one step. Mutates the board.
+ * Each piece records where it came from, so the renderer can animate the move.
  */
-export function applyDrops(board, drops) {
-  const newBoard = new Map();
-  for (const [key, cell] of board) {
-    newBoard.set(key, cell.map(t => ({ ...t })));
-  }
+export function stepGravity(board, tick) {
+  for (const p of board.values()) p.from = null;
 
-  for (const drop of drops) {
-    const cell = newBoard.get(hexKey(drop.triID.q, drop.triID.r));
-    cell[drop.triID.triIndex] = {
-      id: drop.triID,
-      color: drop.color,
-      isPowerUp: drop.isPowerUp,
-      isGlowing: drop.isPowerUp !== null,
-    };
-  }
-
-  return newBoard;
-}
-
-/**
- * Generate content for a single new triangle.
- */
-function generateTriangleContent(activeColors, hasPowerUp) {
-  let isPowerUp = null;
-
-  if (!hasPowerUp) {
-    const roll = Math.random();
-    if (roll < 0.03) {
-      isPowerUp = 'drain';
-    } else if (roll < 0.05) {
-      isPowerUp = 'swap';
+  for (let r = ROWS - 1; r >= 0; r--) {
+    // Alternate scan direction so neither side wins every race for a slot
+    const row = tick % 2 ? rows[r] : [...rows[r]].reverse();
+    for (const { c } of row) {
+      const p = board.get(key(r, c));
+      if (!p || p.from || p.clearT > 0) continue; // already moved this step, or clearing
+      const move = nextMove(board, r, c, p.zig);
+      if (!move) continue;
+      board.delete(key(r, c));
+      board.set(key(move.r, move.c), p);
+      p.from = { r, c };
+      // Alternate after a fall; keep heading the same way while sliding
+      p.zig = move.r > r ? -move.dir : move.dir;
     }
   }
-
-  const color = activeColors[Math.floor(Math.random() * activeColors.length)];
-  return { color, isPowerUp };
 }
 
 /**
- * Check if the board already has a power-up triangle.
+ * Drop a new triangle into a random empty cell on the top row.
+ * Returns false when the bin is full: a resting triangle already sits on the top row.
  */
-function boardHasPowerUp(board) {
-  for (const [, cell] of board) {
-    for (const tri of cell) {
-      if (tri.isPowerUp !== null) return true;
-    }
-  }
-  return false;
-}
+export function spawnPiece(board, activeColors) {
+  if (TOP_CELLS.some(({ r, c }) => board.has(key(r, c)) && isResting(board, r, c))) return false;
 
-/**
- * Check if the game is over — top entry positions are all full.
- */
-export function isGameOver(board, radius = 4) {
-  const topCells = getTopEdgeCells(radius);
-  for (const { q, r } of topCells) {
-    const cell = board.get(hexKey(q, r));
-    if (!cell) continue;
-    for (const i of [4, 5]) {
-      if (cell[i].color === -1) return false;
-    }
-  }
+  const open = TOP_CELLS.filter(({ r, c }) => !board.has(key(r, c)));
+  if (open.length === 0) return false;
+
+  const { r, c } = open[Math.floor(Math.random() * open.length)];
+  const zig = Math.random() < 0.5 ? -1 : 1;
+  const hasPower = [...board.values()].some(p => p.power);
+  board.set(key(r, c), {
+    color: activeColors[Math.floor(Math.random() * activeColors.length)],
+    power: !hasPower && Math.random() < POWER_CHANCE ? (Math.random() < 0.5 ? 'drain' : 'swap') : null,
+    zig: -zig,
+    from: { r: r - 1, c: c - zig }, // enter from above the bin
+    clearT: 0,
+  });
   return true;
-}
-
-/**
- * Fisher-Yates shuffle (in-place).
- */
-function shuffleArray(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
 }

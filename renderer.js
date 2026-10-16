@@ -1,16 +1,17 @@
-// renderer.js — Canvas rendering of board, triangles, and cursor
+// renderer.js — Canvas drawing: the bin, falling triangles, the dial, and effects
 
-import { getValidHexCoords, hexToPixel, triangleVertices, hexKey, hexVertices } from './grid.js';
+import { CELLS, SIZE, ROW_H, key, cellVertices, cellCenter, vertexXY, dialCells, dialOutline } from './grid.js';
 import { COLOR_PALETTE, EMPTY_COLOR, BOARD_BG } from './progression.js';
-import { BOARD_RADIUS } from './gamestate.js';
+import { FALL_STEP, CLEAR_TIME, ROTATE_TIME } from './gamestate.js';
+
+const TOP_MARGIN = 72;     // room for the score line
+const BOTTOM_MARGIN = 100; // room for the rotate buttons
+const PIECE_INSET = 0.9;   // leave a hairline gap between triangles
 
 let canvas, ctx;
-let offsetX = 0, offsetY = 0;
-let currentSize = 30;
+let scale = 30; // pixels per triangle side
+let originX = 0, originY = 0;
 
-/**
- * Initialize the renderer with a canvas element.
- */
 export function initRenderer(canvasEl) {
   canvas = canvasEl;
   ctx = canvas.getContext('2d');
@@ -18,252 +19,155 @@ export function initRenderer(canvasEl) {
   return { canvas, ctx };
 }
 
-/**
- * Recalculate canvas size and offsets for responsive scaling.
- */
+/** Fit the bin to the viewport. */
 export function resize() {
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth;
   const h = window.innerHeight;
-
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
-
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Calculate hex size to fit the board in viewport
-  const boardWidthHexes = 2 * BOARD_RADIUS + 1;
-  const boardHeightHexes = 2 * BOARD_RADIUS + 1;
-
-  const maxHexW = (w * 0.85) / (boardWidthHexes * Math.sqrt(3));
-  const maxHexH = (h * 0.80) / (boardHeightHexes * 1.5 + 0.5);
-  currentSize = Math.min(maxHexW, maxHexH);
-
-  // Center the board
-  offsetX = w / 2;
-  offsetY = h / 2;
+  const availW = w * 0.94;
+  const availH = Math.max(100, h - TOP_MARGIN - BOTTOM_MARGIN);
+  scale = Math.min(availW / (2 * SIZE), availH / (2 * SIZE * ROW_H));
+  originX = w / 2;
+  originY = TOP_MARGIN + availH / 2;
 }
 
-/**
- * Get the current rendering size and offsets (for input hit testing).
- */
-export function getRenderParams() {
-  return { size: currentSize, offsetX, offsetY };
+export const toScreen = ({ x, y }) => ({ x: originX + x * scale, y: originY + y * scale });
+export const toUnit = (px, py) => ({ x: (px - originX) / scale, y: (py - originY) / scale });
+
+function tracePath(points) {
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
 }
 
-/**
- * Render a complete frame.
- */
-export function renderFrame(frame) {
-  const { state, animations, dt } = frame;
+const easeOut = t => 1 - (1 - t) * (1 - t);
+
+export function renderFrame(game, animations) {
   const w = canvas.width / (window.devicePixelRatio || 1);
   const h = canvas.height / (window.devicePixelRatio || 1);
-
-  // Apply screen shake from animations
-  let shakeX = 0, shakeY = 0;
-  if (animations) {
-    const shake = animations.getScreenShake();
-    shakeX = shake.x;
-    shakeY = shake.y;
-  }
+  const shake = animations.getScreenShake();
 
   ctx.save();
-  ctx.translate(shakeX, shakeY);
-
-  // Clear background
+  ctx.translate(shake.x, shake.y);
   ctx.fillStyle = BOARD_BG;
-  ctx.fillRect(-shakeX, -shakeY, w, h);
+  ctx.fillRect(-shake.x, -shake.y, w, h);
 
-  // Draw board
-  drawBoard(state, animations);
-
-  // Draw cursor
-  drawCursor(state);
-
-  // Draw clearing animation
-  if (state.phase === 'clearing' && animations) {
-    drawClearingEffect(state, animations);
-  }
-
-  // Draw particles
-  if (animations) {
-    animations.drawParticles(ctx, offsetX, offsetY);
-  }
+  drawBin();
+  drawPieces(game);
+  drawCursor(game);
+  animations.drawParticles(ctx);
 
   ctx.restore();
 }
 
-/**
- * Draw all triangles on the board.
- */
-function drawBoard(state, animations) {
-  const coords = getValidHexCoords(BOARD_RADIUS);
+/** The empty bin: every cell outlined faintly, so the lattice is readable. */
+function drawBin() {
+  tracePath(binOutline());
+  ctx.fillStyle = EMPTY_COLOR;
+  ctx.fill();
 
-  for (const { q, r } of coords) {
-    const cell = state.board.get(hexKey(q, r));
-    if (!cell) continue;
-
-    for (let i = 0; i < 6; i++) {
-      const tri = cell[i];
-      const verts = triangleVertices({ q, r, triIndex: i }, currentSize);
-
-      // Transform to screen coords
-      const screenVerts = verts.map(v => ({
-        x: v.x + offsetX,
-        y: v.y + offsetY,
-      }));
-
-      // Apply gravity cascade animation offset
-      if (animations) {
-        const gravOffset = animations.getTriangleOffset({ q, r, triIndex: i });
-        if (gravOffset) {
-          for (const v of screenVerts) {
-            v.x += gravOffset.dx * currentSize;
-            v.y += gravOffset.dy * currentSize;
-          }
-        }
-      }
-
-      // Fill
-      ctx.beginPath();
-      ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
-      ctx.lineTo(screenVerts[1].x, screenVerts[1].y);
-      ctx.lineTo(screenVerts[2].x, screenVerts[2].y);
-      ctx.closePath();
-
-      if (tri.color >= 0 && tri.color < COLOR_PALETTE.length) {
-        ctx.fillStyle = COLOR_PALETTE[tri.color];
-      } else {
-        ctx.fillStyle = EMPTY_COLOR;
-      }
-      ctx.fill();
-
-      // Stroke — thicker lines on hex cell boundaries vs inner triangle edges
-      ctx.strokeStyle = '#0a0a1a';
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
-
-      // Power-up glow
-      if (tri.isPowerUp) {
-        const glowAlpha = 0.3 + 0.3 * Math.sin(Date.now() * 0.005);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${glowAlpha})`;
-        ctx.lineWidth = 3;
-        ctx.stroke();
-      }
-    }
-  }
-
-  // Draw hex cell outlines to make boundaries visible
-  for (const { q, r } of coords) {
-    const verts = hexVertices(q, r, currentSize);
-    const screenVerts = verts.map(v => ({
-      x: v.x + offsetX,
-      y: v.y + offsetY,
-    }));
-
-    ctx.beginPath();
-    ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
-    for (let i = 1; i < 6; i++) {
-      ctx.lineTo(screenVerts[i].x, screenVerts[i].y);
-    }
-    ctx.closePath();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.lineWidth = 1;
+  for (const { r, c } of CELLS) {
+    tracePath(cellVertices(r, c).map(toScreen));
     ctx.stroke();
   }
 }
 
-/**
- * Draw cursor — highlight all 6 triangles in the cursor hex + hex outline.
- */
-function drawCursor(state) {
-  const { q, r } = state.cursor;
+function binOutline() {
+  const s = SIZE;
+  return [
+    { x: s, y: 0 }, { x: s / 2, y: s * ROW_H }, { x: -s / 2, y: s * ROW_H },
+    { x: -s, y: 0 }, { x: -s / 2, y: -s * ROW_H }, { x: s / 2, y: -s * ROW_H },
+  ].map(toScreen);
+}
 
-  // Draw white overlay on all 6 triangles
-  for (let i = 0; i < 6; i++) {
-    const verts = triangleVertices({ q, r, triIndex: i }, currentSize);
-    const screenVerts = verts.map(v => ({
-      x: v.x + offsetX,
-      y: v.y + offsetY,
+function drawPieces(game) {
+  const fallT = Math.min(1, game.fallTimer / FALL_STEP);
+
+  // The board already holds the turned dial; draw those six triangles rotated
+  // back by the part of the 60° turn that hasn't played yet.
+  let rotKeys = null, pivot = null, angle = 0;
+  if (game.rotAnim) {
+    const { k, j, dir, t } = game.rotAnim;
+    rotKeys = new Set(dialCells(k, j).map(({ r, c }) => key(r, c)));
+    pivot = toScreen(vertexXY(k, j));
+    angle = -dir * (Math.PI / 3) * (1 - easeOut(Math.min(1, t / ROTATE_TIME)));
+  }
+
+  for (const { r, c } of CELLS) {
+    const p = game.board.get(key(r, c));
+    if (!p) continue;
+
+    const center = cellCenter(r, c);
+    let dx = 0, dy = 0;
+    if (p.from) {
+      // Slide in from the cell it left at the last fall step
+      const from = cellCenter(p.from.r, p.from.c);
+      dx = (from.x - center.x) * (1 - fallT);
+      dy = (from.y - center.y) * (1 - fallT);
+    }
+
+    let inset = PIECE_INSET;
+    let flash = 0;
+    if (p.clearT > 0) {
+      const progress = 1 - p.clearT / CLEAR_TIME;
+      flash = progress < 0.3 ? 1 - progress / 0.3 * 0.4 : 0.6;
+      if (progress > 0.3) inset *= 1 - (progress - 0.3) / 0.7;
+    }
+
+    const points = cellVertices(r, c).map(v => toScreen({
+      x: center.x + (v.x - center.x) * inset + dx,
+      y: center.y + (v.y - center.y) * inset + dy,
     }));
 
-    ctx.beginPath();
-    ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
-    ctx.lineTo(screenVerts[1].x, screenVerts[1].y);
-    ctx.lineTo(screenVerts[2].x, screenVerts[2].y);
-    ctx.closePath();
+    const rotating = rotKeys && rotKeys.has(key(r, c));
+    if (rotating) {
+      ctx.save();
+      ctx.translate(pivot.x, pivot.y);
+      ctx.rotate(angle);
+      ctx.translate(-pivot.x, -pivot.y);
+    }
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    tracePath(points);
+    ctx.fillStyle = COLOR_PALETTE[p.color];
     ctx.fill();
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${flash})`;
+      ctx.fill();
+    }
+    if (p.power) {
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 + 0.4 * Math.sin(Date.now() * 0.008)})`;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+
+    if (rotating) ctx.restore();
   }
+}
 
-  // Draw hex outline
-  const verts = hexVertices(q, r, currentSize);
-  const screenVerts = verts.map(v => ({
-    x: v.x + offsetX,
-    y: v.y + offsetY,
-  }));
+/** The dial: a hexagon around the vertex it turns. */
+function drawCursor(game) {
+  const { k, j } = game.cursor;
+  const outline = dialOutline(k, j).map(toScreen);
 
-  ctx.beginPath();
-  ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
-  for (let i = 1; i < 6; i++) {
-    ctx.lineTo(screenVerts[i].x, screenVerts[i].y);
-  }
-  ctx.closePath();
-
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+  tracePath(outline);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  // Center dot
-  const center = hexToPixel(q, r, currentSize);
+  const center = toScreen(vertexXY(k, j));
   ctx.beginPath();
-  ctx.arc(center.x + offsetX, center.y + offsetY, 3, 0, Math.PI * 2);
+  ctx.arc(center.x, center.y, Math.max(2.5, scale * 0.08), 0, Math.PI * 2);
   ctx.fillStyle = 'white';
   ctx.fill();
 }
-
-/**
- * Draw clearing effect (flash white on clearing hexes).
- */
-function drawClearingEffect(state, animations) {
-  for (const hex of state.pendingClears) {
-    const progress = 1 - (state.clearTimer / 500);
-
-    for (const triID of hex.triangleIDs) {
-      const verts = triangleVertices(triID, currentSize);
-      const screenVerts = verts.map(v => ({
-        x: v.x + offsetX,
-        y: v.y + offsetY,
-      }));
-
-      const cx = (screenVerts[0].x + screenVerts[1].x + screenVerts[2].x) / 3;
-      const cy = (screenVerts[0].y + screenVerts[1].y + screenVerts[2].y) / 3;
-
-      const shrink = progress < 0.2 ? 1 : 1 - ((progress - 0.2) / 0.8);
-      const alpha = progress < 0.2 ? 1 : 1 - ((progress - 0.2) / 0.8);
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(shrink, shrink);
-      ctx.translate(-cx, -cy);
-
-      ctx.beginPath();
-      ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
-      ctx.lineTo(screenVerts[1].x, screenVerts[1].y);
-      ctx.lineTo(screenVerts[2].x, screenVerts[2].y);
-      ctx.closePath();
-
-      ctx.fillStyle = progress < 0.2
-        ? `rgba(255, 255, 255, ${1 - progress * 5})`
-        : `rgba(255, 255, 255, ${alpha * 0.5})`;
-      ctx.fill();
-
-      ctx.restore();
-    }
-  }
-}
-
-export { canvas, ctx, currentSize, offsetX, offsetY };

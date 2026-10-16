@@ -118,7 +118,7 @@ export function drawGameOver(ctx, state, width, height, isNewHighScore) {
   ctx.font = 'bold 36px monospace';
   ctx.fillStyle = 'white';
   ctx.fillText(
-    state.mode === 'main' && state.hexesCleared >= 48 ? 'YOU WIN' : 'GAME OVER',
+    state.won ? 'YOU WIN' : 'GAME OVER',
     width / 2,
     height / 2 - 60
   );
@@ -137,7 +137,7 @@ export function drawGameOver(ctx, state, width, height, isNewHighScore) {
   // Restart hint
   ctx.font = '14px monospace';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-  ctx.fillText('tap to restart', width / 2, height / 2 + 60);
+  ctx.fillText('tap for menu', width / 2, height / 2 + 60);
 }
 
 /**
@@ -155,5 +155,5 @@ export function drawPause(ctx, width, height) {
 
   ctx.font = '14px monospace';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-  ctx.fillText('press space to continue', width / 2, height / 2 + 40);
+  ctx.fillText('tap or press space to continue', width / 2, height / 2 + 40);
 }

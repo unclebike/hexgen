@@ -1,4 +1,4 @@
-// progression.js — Level and color progression
+// progression.js — Colors, levels, and pace
 
 // Color palette in order of introduction
 export const COLOR_PALETTE = [
@@ -15,72 +15,36 @@ export const COLOR_PALETTE = [
 export const EMPTY_COLOR = '#1a1a2e';
 export const BOARD_BG = '#0f0f23';
 
-// Hexes needed to unlock next color
-const HEXES_PER_LEVEL = 6;
+export const HEXES_PER_LEVEL = 6;
+const WIN_HEXES = HEXES_PER_LEVEL * COLOR_PALETTE.length; // 48: six of each colour
 
-// Starting drop interval in ms
-const INITIAL_DROP_INTERVAL = 2000;
-// Decrease per level
-const DROP_INTERVAL_DECREASE = 100;
-// Minimum drop interval
-const MIN_DROP_INTERVAL = 600;
+// Time between new triangles, in ms
+const INITIAL_SPAWN_INTERVAL = 800;
+const SPAWN_INTERVAL_STEP = 70;
+const MIN_SPAWN_INTERVAL = 300;
 
-/**
- * Check if the player has earned a new color, and update state accordingly.
- * @param {GameState} state
- * @returns {GameState} - Updated state (may have new color added)
- */
-export function checkProgression(state) {
-  const newState = { ...state };
-
-  // Check if enough hexes cleared this level to unlock next color
-  if (newState.hexesThisLevel >= HEXES_PER_LEVEL && newState.activeColors.length < 8) {
-    const nextColorIndex = newState.activeColors.length;
-    newState.activeColors = [...newState.activeColors, nextColorIndex];
-    newState.hexesThisLevel = newState.hexesThisLevel - HEXES_PER_LEVEL;
-    newState.level = newState.activeColors.length;
-    newState.dropInterval = Math.max(
-      MIN_DROP_INTERVAL,
-      INITIAL_DROP_INTERVAL - DROP_INTERVAL_DECREASE * (newState.level - 2)
-    );
-    newState.leveledUp = true;
-  }
-
-  return newState;
-}
-
-/**
- * Check if the game is won (main mode only).
- * Main mode ends after clearing hexes through all 8 colors.
- */
-export function checkWinCondition(state) {
-  if (state.mode === 'main') {
-    // Win after 48 total hex clears (6 per color × 8 colors)
-    return state.hexesCleared >= 48;
-  }
-  return false;
-}
-
-/**
- * Check if sprint mode time is up.
- */
-export function checkSprintTimer(state, elapsed) {
-  if (state.mode === 'sprint') {
-    return elapsed >= 180000; // 3 minutes
-  }
-  return false;
-}
-
-/**
- * Get initial active colors (always start with 2).
- */
 export function getInitialColors() {
   return [0, 1];
 }
 
+export function spawnIntervalFor(level) {
+  return Math.max(MIN_SPAWN_INTERVAL, INITIAL_SPAWN_INTERVAL - SPAWN_INTERVAL_STEP * (level - 2));
+}
+
 /**
- * Get initial drop interval.
+ * Add the next colour once enough hexes have been cleared at this level.
+ * Mutates the game. Returns true if it levelled up.
  */
-export function getInitialDropInterval() {
-  return INITIAL_DROP_INTERVAL;
+export function checkProgression(game) {
+  if (game.hexesThisLevel < HEXES_PER_LEVEL || game.activeColors.length >= COLOR_PALETTE.length) return false;
+  game.activeColors = [...game.activeColors, game.activeColors.length];
+  game.hexesThisLevel -= HEXES_PER_LEVEL;
+  game.level = game.activeColors.length;
+  game.spawnInterval = spawnIntervalFor(game.level);
+  return true;
+}
+
+/** Main mode is won after six hexes of every colour. */
+export function checkWinCondition(game) {
+  return game.mode === 'main' && game.hexesCleared >= WIN_HEXES;
 }
