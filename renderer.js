@@ -30,15 +30,18 @@ export function resize() {
   canvas.style.height = h + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+  // The lattice is drawn turned 90°, so the bin stands on a vertex:
+  // it is 2·SIZE·ROW_H wide and 2·SIZE tall on screen
   const availW = w * 0.94;
   const availH = Math.max(100, h - TOP_MARGIN - BOTTOM_MARGIN);
-  scale = Math.min(availW / (2 * SIZE), availH / (2 * SIZE * ROW_H));
+  scale = Math.min(availW / (2 * SIZE * ROW_H), availH / (2 * SIZE));
   originX = w / 2;
   originY = TOP_MARGIN + availH / 2;
 }
 
-export const toScreen = ({ x, y }) => ({ x: originX + x * scale, y: originY + y * scale });
-export const toUnit = (px, py) => ({ x: (px - originX) / scale, y: (py - originY) / scale });
+// Lattice x runs down the screen and lattice y runs right to left
+export const toScreen = ({ x, y }) => ({ x: originX - y * scale, y: originY + x * scale });
+export const toUnit = (px, py) => ({ x: (py - originY) / scale, y: -(px - originX) / scale });
 
 function tracePath(points) {
   ctx.beginPath();

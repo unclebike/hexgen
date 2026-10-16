@@ -1,75 +1,94 @@
 // dropper.js — Triangles raining into the bin, and falling once they're in
 //
-// A triangle can't flip as it falls, so it moves diagonally one row at a time,
-// (r, c) → (r+1, c±1), which keeps its orientation. It alternates left and
-// right, so in open space it zig-zags straight down. It lands the moment its
-// next step is blocked by another triangle, even if there's a gap beside it.
-// Only the bin's slanted walls make it slide: when its next step would leave
-// the bin, it takes the other diagonal, running down along the wall.
+// On screen the bin stands on a vertex, so the lattice's rows are vertical
+// columns and "down" is +c along a row. A triangle falls straight down its
+// column, two cells at a time so it keeps its shape, and lands as soon as the
+// cell below it is taken. Only the bin's slanted bottom walls make it slide:
+// at the foot of a column it steps into the next column toward the bottom
+// point and carries on falling.
 
-import { ROWS, CELLS, TOP_CELLS, isCell, key } from './grid.js';
+import { ROWS, SIZE, CELLS, isCell, cellCenter, key } from './grid.js';
 
 const POWER_CHANCE = 0.04;
-const rows = Array.from({ length: ROWS }, (_, r) => CELLS.filter(cell => cell.r === r));
+
+// Column r, top to bottom
+const columns = Array.from({ length: ROWS }, (_, r) =>
+  CELLS.filter(cell => cell.r === r).sort((a, b) => a.c - b.c));
+
+/** The top cell of every column: where new triangles enter. */
+export const SPAWN_CELLS = columns.map(col => col[0]);
+
+const isOpen = (board, r, c) => isCell(r, c) && !board.has(key(r, c));
 
 /** Where the piece at (r, c) moves next, or null if it has landed. */
-function nextMove(board, r, c, zig) {
-  for (const dir of [zig, -zig]) {
-    if (!isCell(r + 1, c + dir)) continue; // a wall: slide along it
-    if (board.has(key(r + 1, c + dir))) return null; // a triangle: land
-    return { r: r + 1, c: c + dir, dir };
+function nextMove(board, r, c) {
+  if (isCell(r, c + 1)) {
+    if (board.has(key(r, c + 1))) return null; // resting on the triangle below
+    // Fall a full edge (two cells, same shape), or one cell into the last gap
+    return isOpen(board, r, c + 2) ? { r, c: c + 2 } : { r, c: c + 1 };
   }
-  return null; // walls on both sides: the floor
+  // The foot of the column, against a slanted wall: slide one column inward,
+  // into the open cell next to us that is lower down
+  const inward = r < SIZE ? r + 1 : r - 1;
+  const here = cellCenter(r, c);
+  let best = null;
+  let bestD = Infinity;
+  for (let nc = c - 1; nc <= c + 2; nc++) {
+    if (!isOpen(board, inward, nc)) continue;
+    const there = cellCenter(inward, nc);
+    if (there.x <= here.x + 1e-9) continue; // must be lower on screen
+    const d = (there.x - here.x) ** 2 + (there.y - here.y) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = { r: inward, c: nc };
+    }
+  }
+  return best;
 }
 
 /** A piece is resting once it has landed. */
 export function isResting(board, r, c) {
-  const p = board.get(key(r, c));
-  return nextMove(board, r, c, p ? p.zig : 1) === null;
+  return nextMove(board, r, c) === null;
 }
 
 /**
  * Move every loose piece one step. Mutates the board.
  * Each piece records where it came from, so the renderer can animate the move.
  */
-export function stepGravity(board, tick) {
+export function stepGravity(board) {
   for (const p of board.values()) p.from = null;
 
-  for (let r = ROWS - 1; r >= 0; r--) {
-    // Alternate scan direction so neither side wins every race for a slot
-    const row = tick % 2 ? rows[r] : [...rows[r]].reverse();
-    for (const { c } of row) {
-      const p = board.get(key(r, c));
-      if (!p || p.from || p.clearT > 0) continue; // already moved this step, or clearing
-      const move = nextMove(board, r, c, p.zig);
-      if (!move) continue;
-      board.delete(key(r, c));
-      board.set(key(move.r, move.c), p);
-      p.from = { r, c };
-      p.zig = -move.dir; // alternate, so it zig-zags straight down
-    }
+  // Bottom of each column first, so a falling stack moves together
+  const order = [...CELLS].sort((a, b) => b.c - a.c);
+  for (const { r, c } of order) {
+    const p = board.get(key(r, c));
+    if (!p || p.from || p.clearT > 0) continue; // already moved this step, or clearing
+    const move = nextMove(board, r, c);
+    if (!move) continue;
+    board.delete(key(r, c));
+    board.set(key(move.r, move.c), p);
+    p.from = { r, c };
   }
 }
 
 /**
- * Drop a new triangle into a random empty cell on the top row.
- * Returns false when the bin is full: a resting triangle already sits on the top row.
+ * Drop a new triangle into the top of a random open column; a full column
+ * just stops taking new ones. Returns 'full' when every column is stacked to
+ * its top, 'wait' when the tops are only blocked by triangles still falling.
  */
 export function spawnPiece(board, activeColors) {
-  if (TOP_CELLS.some(({ r, c }) => board.has(key(r, c)) && isResting(board, r, c))) return false;
-
-  const open = TOP_CELLS.filter(({ r, c }) => !board.has(key(r, c)));
-  if (open.length === 0) return false;
+  const open = SPAWN_CELLS.filter(({ r, c }) => !board.has(key(r, c)));
+  if (open.length === 0) {
+    return SPAWN_CELLS.every(({ r, c }) => isResting(board, r, c)) ? 'full' : 'wait';
+  }
 
   const { r, c } = open[Math.floor(Math.random() * open.length)];
-  const zig = Math.random() < 0.5 ? -1 : 1;
   const hasPower = [...board.values()].some(p => p.power);
   board.set(key(r, c), {
     color: activeColors[Math.floor(Math.random() * activeColors.length)],
     power: !hasPower && Math.random() < POWER_CHANCE ? (Math.random() < 0.5 ? 'drain' : 'swap') : null,
-    zig: -zig,
-    from: { r: r - 1, c: c - zig }, // enter from above the bin
+    from: { r, c: c - 2 }, // enter from above the bin
     clearT: 0,
   });
-  return true;
+  return 'spawned';
 }

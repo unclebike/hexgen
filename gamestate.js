@@ -2,7 +2,7 @@
 // The game object is mutated in place. update() and the input handlers return
 // a list of events (clears, level-ups, game over) for audio and effects.
 
-import { SIZE, ROW_H, ROWS, CELLS, isDial, nearestDial, key } from './grid.js';
+import { SIZE, CELLS, isDial, nearestDial, cellCenter, key } from './grid.js';
 import { rotateDial } from './rotation.js';
 import { findHexes } from './hexdetect.js';
 import { stepGravity, spawnPiece, isResting } from './dropper.js';
@@ -15,7 +15,7 @@ export const ROTATE_TIME = 120;
 
 export function createGame(mode = 'main') {
   // Start the dial low in the middle, where the first triangles land
-  const start = nearestDial(0, SIZE * ROW_H * 0.5);
+  const start = nearestDial(SIZE * 0.5, 0); // lattice x is down on screen
   return {
     board: new Map(), // key(r, c) → piece; empty cells are absent
     mode,
@@ -73,16 +73,17 @@ export function update(game, dt) {
     }
     game.fallTimer -= FALL_STEP;
     game.tick++;
-    stepGravity(game.board, game.tick);
+    stepGravity(game.board);
 
     game.spawnTimer -= FALL_STEP;
     if (game.spawnTimer <= 0) {
       game.spawnTimer += game.spawnInterval;
-      if (!spawnPiece(game.board, game.activeColors)) {
+      const result = spawnPiece(game.board, game.activeColors);
+      if (result === 'full') {
         endGame(game, events);
         return events;
       }
-      events.push({ type: 'spawn' });
+      if (result === 'spawned') events.push({ type: 'spawn' });
     }
   }
 
@@ -124,10 +125,10 @@ function detectClears(game, events) {
 /** Glowing triangles fire when they're cleared. */
 function applyPower(game, power, events) {
   if (power === 'drain') {
-    // Open a hole in the bottom of the bin
+    // Empty the bottom two triangle-heights of the bin (lattice x is down)
     for (const { r, c } of CELLS) {
       const p = game.board.get(key(r, c));
-      if (r >= ROWS - 2 && p && !(p.clearT > 0)) game.board.delete(key(r, c));
+      if (cellCenter(r, c).x > SIZE - 2 && p && !(p.clearT > 0)) game.board.delete(key(r, c));
     }
   } else if (power === 'swap' && game.activeColors.length > 1) {
     // Turn every triangle of one colour into another
@@ -163,20 +164,21 @@ export function moveCursorTo(game, dial) {
 }
 
 /**
- * Nudge the dial with the keyboard. Left/right move along the row; up/down
- * step to the next row and drift back toward the column you were last in.
+ * Nudge the dial with the keyboard. On screen the lattice is turned 90°:
+ * up/down move along a lattice row (j ∓ 2), and left/right step to the
+ * neighbouring row, drifting back toward the height you were last at.
  */
 export function moveCursorDir(game, direction) {
   if (game.phase !== 'playing') return;
   const { k, j, stickyJ } = game.cursor;
 
-  if (direction === 'left' || direction === 'right') {
-    const nj = j + (direction === 'left' ? -2 : 2);
+  if (direction === 'up' || direction === 'down') {
+    const nj = j + (direction === 'up' ? -2 : 2);
     if (isDial(k, nj)) game.cursor = { k, j: nj, stickyJ: nj };
     return;
   }
 
-  const nk = k + (direction === 'up' ? -1 : 1);
+  const nk = k + (direction === 'left' ? 1 : -1);
   const options = [j - 1, j + 1]
     .filter(nj => isDial(nk, nj))
     .sort((a, b) => Math.abs(a - stickyJ) - Math.abs(b - stickyJ));
