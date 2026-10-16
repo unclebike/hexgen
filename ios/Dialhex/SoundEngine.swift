@@ -47,7 +47,8 @@ final class SoundEngine {
 
     init() {
         // Mono float, 44.1 kHz; the main mixer converts to whatever the hardware wants.
-        format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        self.format = format
         isMuted = UserDefaults.standard.bool(forKey: mutedKey)
         graph = AudioGraph(format: format)
         applyVolume()
@@ -163,7 +164,8 @@ final class SoundEngine {
             let kind = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             let began = kind == AVAudioSession.InterruptionType.began.rawValue
             MainActor.assumeIsolated {
-                if began { self?.graph.engine.stop() } else { self?.start() }
+                guard let self else { return }
+                if began { self.graph.engine.stop() } else { self.start() }
             }
         })
         observers.append(center.addObserver(forName: .AVAudioEngineConfigurationChange,
