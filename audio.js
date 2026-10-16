@@ -5,7 +5,7 @@ let audioCtx = null;
 let masterGain = null;
 let muted = false;
 let droneOsc = null;
-let droneGain = null;
+let droneLfo = null;
 
 // Base frequencies for color-mapped tones (C4 to C5, chromatic)
 const COLOR_FREQUENCIES = [
@@ -214,21 +214,21 @@ export function startDrone(colorCount) {
   stopDrone();
 
   droneOsc = audioCtx.createOscillator();
-  droneGain = audioCtx.createGain();
+  const droneGain = audioCtx.createGain();
 
   droneOsc.type = 'sine';
   droneOsc.frequency.value = 40;
   droneGain.gain.value = 0.03;
 
   // Add vibrato based on color count
-  const lfo = audioCtx.createOscillator();
+  droneLfo = audioCtx.createOscillator();
   const lfoGain = audioCtx.createGain();
-  lfo.type = 'sine';
-  lfo.frequency.value = colorCount; // 1Hz per color
+  droneLfo.type = 'sine';
+  droneLfo.frequency.value = colorCount; // 1Hz per color
   lfoGain.gain.value = 2; // 2Hz frequency deviation
-  lfo.connect(lfoGain);
+  droneLfo.connect(lfoGain);
   lfoGain.connect(droneOsc.frequency);
-  lfo.start();
+  droneLfo.start();
 
   droneOsc.connect(droneGain);
   droneGain.connect(masterGain);
@@ -236,16 +236,15 @@ export function startDrone(colorCount) {
 }
 
 /**
- * Stop background drone.
+ * Stop background drone. Stops the vibrato LFO too, which used to keep running
+ * (one leaked oscillator per level-up and per game).
  */
 export function stopDrone() {
-  if (droneOsc) {
-    try { droneOsc.stop(); } catch (e) {}
-    droneOsc = null;
+  for (const osc of [droneOsc, droneLfo]) {
+    if (osc) try { osc.stop(); } catch (e) {}
   }
-  if (droneGain) {
-    droneGain = null;
-  }
+  droneOsc = null;
+  droneLfo = null;
 }
 
 /**

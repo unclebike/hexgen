@@ -1,38 +1,26 @@
-// rotation.js — Core rotation mechanic
-// Rotates the 6 triangles within a hex cell by 60° CW or CCW
-// Matches original Dialhex: the cursor is one hex, rotation cycles its contents
+// rotation.js — Turning the dial
+// The dial sits on a vertex and turns the six triangles around it by 60°.
+// Because dials overlap, turning one moves triangles into neighbouring hexes.
 
-import { hexKey } from './grid.js';
+import { dialCells, key } from './grid.js';
 
 /**
- * Rotate the 6 triangles within a hex cell by one step (60°).
- * CW (direction=1): each position i gets data from position (i-1+6)%6
- * CCW (direction=-1): each position i gets data from position (i+1)%6
- *
- * @param {Map} board - Current board state
- * @param {number} q - Hex q coordinate
- * @param {number} r - Hex r coordinate
- * @param {number} direction - 1 for CW, -1 for CCW
- * @returns {Map} - New board with rotated cell
+ * Turn the six cells around vertex (k, j) one step. dir: 1 = clockwise, -1 = counter.
+ * Mutates the board. Returns false (and changes nothing) if a cell is mid-clear.
  */
-export function rotateHexCell(board, q, r, direction) {
-  const key = hexKey(q, r);
-  const cell = board.get(key);
-  if (!cell) return board;
+export function rotateDial(board, k, j, dir) {
+  const cells = dialCells(k, j);
+  const pieces = cells.map(({ r, c }) => board.get(key(r, c)));
+  if (pieces.some(p => p && p.clearT > 0)) return false;
 
-  // Clone the board
-  const newBoard = new Map();
-  for (const [k, c] of board) {
-    newBoard.set(k, k === key ? new Array(6) : c.map(t => ({ ...t })));
-  }
-
-  const newCell = newBoard.get(key);
-  for (let i = 0; i < 6; i++) {
-    const srcIndex = direction === 1
-      ? (i - 1 + 6) % 6   // CW: position i gets data from the one before it
-      : (i + 1) % 6;       // CCW: position i gets data from the one after it
-    newCell[i] = { ...cell[srcIndex], id: { q, r, triIndex: i } };
-  }
-
-  return newBoard;
+  cells.forEach(({ r, c }, i) => {
+    const p = pieces[(i - dir + 6) % 6];
+    if (p) {
+      p.from = null;
+      board.set(key(r, c), p);
+    } else {
+      board.delete(key(r, c));
+    }
+  });
+  return true;
 }

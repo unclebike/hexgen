@@ -1,71 +1,23 @@
-// hexdetect.js — Detect completed hexagons (6 same-color triangles in one hex cell)
+// hexdetect.js — Find completed Hexes: six same-coloured triangles around one vertex
 
-import { hexKey, getValidHexCoords } from './grid.js';
-
-/**
- * Scan the board for completed hexagons.
- * A hex is complete when all 6 triangles in a cell have the same non-empty color.
- * @param {Map} board - Current board state
- * @param {number} radius - Board radius
- * @returns {Array<{hexCoord, color, triangleIDs}>} - Detected completed hexes
- */
-export function detectCompletedHexes(board, radius = 4) {
-  const completed = [];
-  const coords = getValidHexCoords(radius);
-
-  for (const { q, r } of coords) {
-    const cell = board.get(hexKey(q, r));
-    if (!cell) continue;
-
-    const firstColor = cell[0].color;
-    if (firstColor === -1) continue; // empty cell
-
-    let allSame = true;
-    for (let i = 1; i < 6; i++) {
-      if (cell[i].color !== firstColor) {
-        allSame = false;
-        break;
-      }
-    }
-
-    if (allSame) {
-      console.log(`[CLEAR] Hex (${q},${r}) completed with color ${firstColor}!`);
-      completed.push({
-        hexCoord: { q, r },
-        color: firstColor,
-        triangleIDs: cell.map((_, i) => ({ q, r, triIndex: i })),
-      });
-    }
-  }
-
-  return completed;
-}
+import { DIALS, dialCells, key } from './grid.js';
 
 /**
- * Clear completed hexes from the board — set their triangles to empty.
- * Returns a new board (immutable update).
- * @param {Map} board - Current board state
- * @param {Array<{hexCoord, color, triangleIDs}>} hexes - Hexes to clear
- * @returns {Map} - New board with cleared triangles
+ * Scan every dial position for a completed Hex.
+ * Only resting triangles count; isResting(r, c) says whether a cell's piece can still fall.
+ * @returns {Array<{k, j, color, cells}>}
  */
-export function clearHexes(board, hexes) {
-  const newBoard = new Map();
-  for (const [key, cell] of board) {
-    newBoard.set(key, cell.map(t => ({ ...t })));
+export function findHexes(board, isResting) {
+  const found = [];
+  for (const { k, j } of DIALS) {
+    const cells = dialCells(k, j);
+    const first = board.get(key(cells[0].r, cells[0].c));
+    if (!first) continue;
+    const complete = cells.every(({ r, c }) => {
+      const p = board.get(key(r, c));
+      return p && p.color === first.color && !(p.clearT > 0) && isResting(r, c);
+    });
+    if (complete) found.push({ k, j, color: first.color, cells });
   }
-
-  for (const hex of hexes) {
-    const key = hexKey(hex.hexCoord.q, hex.hexCoord.r);
-    const cell = newBoard.get(key);
-    for (let i = 0; i < 6; i++) {
-      cell[i] = {
-        id: { q: hex.hexCoord.q, r: hex.hexCoord.r, triIndex: i },
-        color: -1,
-        isPowerUp: null,
-        isGlowing: false,
-      };
-    }
-  }
-
-  return newBoard;
+  return found;
 }

@@ -1,428 +1,189 @@
-// gamestate.js — Game state manager
-// Processes inputs, manages state transitions, coordinates all game systems
+// gamestate.js — Game state and rules
+// The game object is mutated in place. update() and the input handlers return
+// a list of events (clears, level-ups, game over) for audio and effects.
 
-import { createBoard, getValidHexCoords, getAdjacentTriangles, hexKey, isValidHex, getCentroidY, getCentroidX, getGravityTargets, getHexNeighbors } from './grid.js';
-import { rotateHexCell } from './rotation.js';
-import { detectCompletedHexes, clearHexes } from './hexdetect.js';
-import { generateDrop, applyDrops, isGameOver } from './dropper.js';
-import { checkProgression, checkWinCondition, getInitialColors, getInitialDropInterval } from './progression.js';
+import { SIZE, ROW_H, ROWS, CELLS, isDial, nearestDial, key } from './grid.js';
+import { rotateDial } from './rotation.js';
+import { findHexes } from './hexdetect.js';
+import { stepGravity, spawnPiece, isResting } from './dropper.js';
+import { getInitialColors, spawnIntervalFor, checkProgression, checkWinCondition } from './progression.js';
 import { calculateScore, saveHighScore } from './scoring.js';
 
-const BOARD_RADIUS = 4;
-const CLEAR_DURATION = 500; // ms for clearing animation
+export const FALL_STEP = 75;   // ms per row of falling
+export const CLEAR_TIME = 450; // ms a completed hex flashes before vanishing
+export const ROTATE_TIME = 120;
 
-/**
- * Create initial game state for a given mode.
- */
-export function createInitialState(mode = 'main') {
-  const board = createBoard(BOARD_RADIUS);
-  const activeColors = getInitialColors();
-
+export function createGame(mode = 'main') {
+  // Start the dial low in the middle, where the first triangles land
+  const start = nearestDial(0, SIZE * ROW_H * 0.5);
   return {
-    board,
+    board: new Map(), // key(r, c) → piece; empty cells are absent
+    mode,
+    phase: 'playing', // 'playing' | 'paused' | 'gameover'
+    won: false,
     score: 0,
     level: 2,
     hexesCleared: 0,
     hexesThisLevel: 0,
-    dropTimer: getInitialDropInterval(),
-    dropInterval: getInitialDropInterval(),
-    activeColors,
-    mode,
-    phase: 'playing',
-    cursor: { q: 0, r: 0 },
-    clearTimer: 0,
-    pendingClears: [],
-    startTime: Date.now(),
+    activeColors: getInitialColors(),
+    spawnInterval: spawnIntervalFor(2),
+    spawnTimer: 0,
+    fallTimer: 0,
+    tick: 0,
+    cursor: { k: start.k, j: start.j, stickyJ: start.j },
+    rotAnim: null,
     sprintTimeRemaining: mode === 'sprint' ? 180000 : -1,
-    leveledUp: false,
-    justCleared: [],
-    justDropped: false,
   };
 }
 
-/**
- * Process an input event against the current state.
- * Returns new state.
- */
-export function processInput(state, event) {
-  if (state.phase !== 'playing') return state;
+/** Advance the game by dt ms. Returns events. */
+export function update(game, dt) {
+  const events = [];
+  if (game.phase !== 'playing') return events;
 
-  switch (event.type) {
-    case 'rotateCW':
-      return performRotation(state, 1);
-    case 'rotateCCW':
-      return performRotation(state, -1);
-    case 'moveCursor':
-      return moveCursor(state, event.target);
-    case 'pause':
-      return { ...state, phase: 'paused' };
-    default:
-      return state;
+  if (game.mode === 'sprint') {
+    game.sprintTimeRemaining -= dt;
+    if (game.sprintTimeRemaining <= 0) {
+      game.sprintTimeRemaining = 0;
+      endGame(game, events);
+      return events;
+    }
   }
-}
 
-/**
- * Unpause the game.
- */
-export function unpause(state) {
-  if (state.phase === 'paused') {
-    return { ...state, phase: 'playing' };
+  if (game.rotAnim) {
+    game.rotAnim.t += dt;
+    if (game.rotAnim.t >= ROTATE_TIME) game.rotAnim = null;
   }
-  return state;
-}
 
-/**
- * Advance the game by dt milliseconds.
- * Handles drop timer, clearing phase transitions, sprint timer.
- */
-export function tick(state, dt) {
-  if (state.phase === 'paused' || state.phase === 'gameover') return state;
+  // Finished clears leave holes for the triangles above to fall into
+  for (const [k, p] of game.board) {
+    if (p.clearT > 0) {
+      p.clearT -= dt;
+      if (p.clearT <= 0) game.board.delete(k);
+    }
+  }
 
-  let newState = { ...state, leveledUp: false, justCleared: [], justDropped: false, gravityMoves: null };
+  // Falling and spawning both run on the same step clock, so new triangles
+  // enter in sync with the ones already falling.
+  game.fallTimer += dt;
+  for (let steps = 0; game.fallTimer >= FALL_STEP; steps++) {
+    if (steps === 3) { // fell far behind (tab was hidden); don't fast-forward
+      game.fallTimer = 0;
+      break;
+    }
+    game.fallTimer -= FALL_STEP;
+    game.tick++;
+    stepGravity(game.board, game.tick);
 
-  // Handle clearing phase
-  if (newState.phase === 'clearing') {
-    newState.clearTimer -= dt;
-    if (newState.clearTimer <= 0) {
-      // Clear the hexes from the board
-      newState.board = clearHexes(newState.board, newState.pendingClears);
-      newState.pendingClears = [];
-      newState.phase = 'playing';
-
-      // Apply gravity after clear
-      const { board: settledBoard, moveLog } = settleBoard(newState.board);
-      newState.board = settledBoard;
-      if (moveLog.length > 0) {
-        newState.gravityMoves = moveLog;
+    game.spawnTimer -= FALL_STEP;
+    if (game.spawnTimer <= 0) {
+      game.spawnTimer += game.spawnInterval;
+      if (!spawnPiece(game.board, game.activeColors)) {
+        endGame(game, events);
+        return events;
       }
-
-      // Check for chain clears after settling
-      const chainClears = detectCompletedHexes(newState.board, BOARD_RADIUS);
-      if (chainClears.length > 0) {
-        const points = calculateScore(chainClears.length, newState.level);
-        return {
-          ...newState,
-          phase: 'clearing',
-          clearTimer: CLEAR_DURATION,
-          pendingClears: chainClears,
-          score: newState.score + points,
-          hexesCleared: newState.hexesCleared + chainClears.length,
-          hexesThisLevel: newState.hexesThisLevel + chainClears.length,
-          justCleared: chainClears,
-        };
-      }
-
-      // Check progression (new color?)
-      newState = checkProgression(newState);
-
-      // Check win condition
-      if (checkWinCondition(newState)) {
-        saveHighScore(newState.mode, newState.score);
-        return { ...newState, phase: 'gameover' };
-      }
-    }
-    return newState;
-  }
-
-  // Sprint timer
-  if (newState.mode === 'sprint') {
-    newState.sprintTimeRemaining -= dt;
-    if (newState.sprintTimeRemaining <= 0) {
-      saveHighScore('sprint', newState.score);
-      return { ...newState, phase: 'gameover', sprintTimeRemaining: 0 };
+      events.push({ type: 'spawn' });
     }
   }
 
-  // Drop timer
-  newState.dropTimer -= dt;
-  if (newState.dropTimer <= 0) {
-    newState.dropTimer = newState.dropInterval;
+  detectClears(game, events);
+  return events;
+}
 
-    // Check game over before dropping
-    if (isGameOver(newState.board, BOARD_RADIUS)) {
-      saveHighScore(newState.mode, newState.score);
-      return { ...newState, phase: 'gameover' };
-    }
+function detectClears(game, events) {
+  const hexes = findHexes(game.board, (r, c) => isResting(game.board, r, c));
+  if (hexes.length === 0) return;
 
-    // Generate and apply drops
-    const drops = generateDrop(newState.board, newState.activeColors, BOARD_RADIUS);
-    if (drops.length > 0) {
-      newState.board = applyDrops(newState.board, drops);
-      newState.justDropped = true;
-
-      // Apply gravity after drop
-      const { board: settledBoard, moveLog } = settleBoard(newState.board);
-      newState.board = settledBoard;
-      if (moveLog.length > 0) {
-        newState.gravityMoves = moveLog;
-      }
-
-      // Check for completed hexes after drop + settle
-      newState = checkForClears(newState);
+  const powers = [];
+  for (const hex of hexes) {
+    for (const { r, c } of hex.cells) {
+      const p = game.board.get(key(r, c));
+      if (p.clearT > 0) continue; // shared with another hex found this pass
+      p.clearT = CLEAR_TIME;
+      if (p.power) powers.push(p.power);
     }
   }
 
-  return newState;
+  const points = calculateScore(hexes.length, game.level);
+  game.score += points;
+  game.hexesCleared += hexes.length;
+  game.hexesThisLevel += hexes.length;
+  events.push({ type: 'clear', hexes, points });
+
+  for (const power of powers) applyPower(game, power, events);
+
+  if (checkProgression(game)) {
+    events.push({ type: 'levelup', color: game.activeColors[game.activeColors.length - 1] });
+  }
+  if (checkWinCondition(game)) {
+    game.won = true;
+    endGame(game, events);
+  }
+}
+
+/** Glowing triangles fire when they're cleared. */
+function applyPower(game, power, events) {
+  if (power === 'drain') {
+    // Open a hole in the bottom of the bin
+    for (const { r, c } of CELLS) {
+      const p = game.board.get(key(r, c));
+      if (r >= ROWS - 2 && p && !(p.clearT > 0)) game.board.delete(key(r, c));
+    }
+  } else if (power === 'swap' && game.activeColors.length > 1) {
+    // Turn every triangle of one colour into another
+    const colors = game.activeColors;
+    const from = colors[Math.floor(Math.random() * colors.length)];
+    const others = colors.filter(color => color !== from);
+    const to = others[Math.floor(Math.random() * others.length)];
+    for (const p of game.board.values()) {
+      if (p.color === from && !(p.clearT > 0)) p.color = to;
+    }
+  }
+  events.push({ type: 'power', power });
+}
+
+function endGame(game, events) {
+  game.phase = 'gameover';
+  events.push({ type: 'gameover', won: game.won, newHighScore: saveHighScore(game.mode, game.score) });
+}
+
+/** Turn the dial. dir: 1 = clockwise, -1 = counter-clockwise. */
+export function rotate(game, dir) {
+  if (game.phase !== 'playing') return [];
+  const { k, j } = game.cursor;
+  if (!rotateDial(game.board, k, j, dir)) return [];
+  game.rotAnim = { k, j, dir, t: 0 };
+  return [{ type: 'rotate' }];
+}
+
+/** Put the dial on a vertex. */
+export function moveCursorTo(game, dial) {
+  if (game.phase !== 'playing' || !dial || !isDial(dial.k, dial.j)) return;
+  game.cursor = { k: dial.k, j: dial.j, stickyJ: dial.j };
 }
 
 /**
- * Perform a rotation and check for clears.
+ * Nudge the dial with the keyboard. Left/right move along the row; up/down
+ * step to the next row and drift back toward the column you were last in.
  */
-function performRotation(state, direction) {
-  const { q, r } = state.cursor;
-  const newBoard = rotateHexCell(state.board, q, r, direction);
-  let newState = { ...state, board: newBoard };
+export function moveCursorDir(game, direction) {
+  if (game.phase !== 'playing') return;
+  const { k, j, stickyJ } = game.cursor;
 
-  // Debug: log cursor hex state after rotation
-  const cell = newBoard.get(hexKey(q, r));
-  if (cell) {
-    const colors = cell.map(t => t.color);
-    const filled = colors.filter(c => c >= 0);
-    console.log(`[ROTATE] Hex (${q},${r}) colors: [${colors}] (${filled.length}/6 filled)`);
+  if (direction === 'left' || direction === 'right') {
+    const nj = j + (direction === 'left' ? -2 : 2);
+    if (isDial(k, nj)) game.cursor = { k, j: nj, stickyJ: nj };
+    return;
   }
 
-  // Check for clears after rotation
-  newState = checkForClears(newState);
-
-  return newState;
+  const nk = k + (direction === 'up' ? -1 : 1);
+  const options = [j - 1, j + 1]
+    .filter(nj => isDial(nk, nj))
+    .sort((a, b) => Math.abs(a - stickyJ) - Math.abs(b - stickyJ));
+  if (options.length) game.cursor = { k: nk, j: options[0], stickyJ };
 }
 
-/**
- * Check for completed hexes and transition to clearing phase if found.
- */
-function checkForClears(state) {
-  const completed = detectCompletedHexes(state.board, BOARD_RADIUS);
-  if (completed.length > 0) {
-    const points = calculateScore(completed.length, state.level);
-    return {
-      ...state,
-      phase: 'clearing',
-      clearTimer: CLEAR_DURATION,
-      pendingClears: completed,
-      score: state.score + points,
-      hexesCleared: state.hexesCleared + completed.length,
-      hexesThisLevel: state.hexesThisLevel + completed.length,
-      justCleared: completed,
-    };
-  }
-  return state;
+export function togglePause(game) {
+  if (game.phase === 'playing') game.phase = 'paused';
+  else if (game.phase === 'paused') game.phase = 'playing';
 }
-
-/**
- * Move the cursor to a hex cell.
- * target is {q, r} for a hex cell.
- */
-function moveCursor(state, target) {
-  if (!target) return state;
-  if (!isValidHex(target.q, target.r, BOARD_RADIUS)) return state;
-
-  return {
-    ...state,
-    cursor: { q: target.q, r: target.r },
-  };
-}
-
-/**
- * Move cursor to adjacent hex in a direction.
- * direction is 'up', 'down', 'left', 'right'
- */
-export function moveCursorDirection(state, direction) {
-  if (state.phase !== 'playing') return state;
-
-  const { q, r } = state.cursor;
-  const neighbors = getHexNeighbors(q, r, BOARD_RADIUS);
-
-  const dirAngles = {
-    'right': 0,
-    'down': Math.PI / 2,
-    'left': Math.PI,
-    'up': -Math.PI / 2,
-  };
-
-  const targetAngle = dirAngles[direction];
-  if (targetAngle === undefined) return state;
-
-  const SQRT3 = Math.sqrt(3);
-  let bestHex = null;
-  let bestDist = Infinity;
-
-  for (const n of neighbors) {
-    const dx = SQRT3 * (n.q - q) + (SQRT3 / 2) * (n.r - r);
-    const dy = 1.5 * (n.r - r);
-    const angle = Math.atan2(dy, dx);
-    let angleDiff = angle - targetAngle;
-    angleDiff = ((angleDiff + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
-    const dist = Math.abs(angleDiff);
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestHex = n;
-    }
-  }
-
-  if (bestHex) {
-    return { ...state, cursor: { q: bestHex.q, r: bestHex.r } };
-  }
-  return state;
-}
-
-/**
- * Activate a power-up at the cursor position.
- */
-export function activatePowerUp(state) {
-  const { q, r } = state.cursor;
-  const cell = state.board.get(hexKey(q, r));
-  if (!cell) return state;
-
-  const powerUpTri = cell.find(t => t.isPowerUp !== null);
-  if (!powerUpTri) return state;
-
-  let newState = { ...state };
-
-  if (powerUpTri.isPowerUp === 'drain') {
-    newState = activateDrain(newState);
-  } else if (powerUpTri.isPowerUp === 'swap') {
-    newState = activateSwap(newState);
-  }
-
-  return newState;
-}
-
-/**
- * Drain power-up: remove all triangles in the bottom row.
- */
-function activateDrain(state) {
-  const newBoard = new Map();
-  for (const [key, cell] of state.board) {
-    newBoard.set(key, cell.map(t => ({ ...t })));
-  }
-
-  const coords = getValidHexCoords(BOARD_RADIUS);
-  const maxR = Math.max(...coords.map(c => c.r));
-  const bottomCells = coords.filter(c => c.r === maxR);
-
-  for (const { q, r } of bottomCells) {
-    const cell = newBoard.get(hexKey(q, r));
-    for (let i = 0; i < 6; i++) {
-      cell[i] = {
-        id: { q, r, triIndex: i },
-        color: -1,
-        isPowerUp: null,
-        isGlowing: false,
-      };
-    }
-  }
-
-  return { ...state, board: newBoard };
-}
-
-/**
- * Swap power-up: change all triangles of one random color to another.
- */
-function activateSwap(state) {
-  const { activeColors } = state;
-  if (activeColors.length < 2) return state;
-
-  const fromColor = activeColors[Math.floor(Math.random() * activeColors.length)];
-  let toColor;
-  do {
-    toColor = activeColors[Math.floor(Math.random() * activeColors.length)];
-  } while (toColor === fromColor);
-
-  const newBoard = new Map();
-  for (const [key, cell] of state.board) {
-    newBoard.set(key, cell.map(t => {
-      if (t.color === fromColor) {
-        return { ...t, color: toColor };
-      }
-      return { ...t };
-    }));
-  }
-
-  return { ...state, board: newBoard };
-}
-
-/**
- * Apply gravity — settle all triangles downward until stable.
- * Uses getGravityTargets for vertical fall paths (top→bottom within hex,
- * then cross-hex to the hex below, choosing exit that minimizes x-drift).
- * Returns { board, moveLog } where moveLog is an array of passes,
- * each pass an array of {from, to} moves for animation.
- */
-function settleBoard(board) {
-  const newBoard = new Map();
-  for (const [key, cell] of board) {
-    newBoard.set(key, cell.map(t => ({ ...t })));
-  }
-
-  // Pre-compute all triangle positions sorted by y ascending (top first)
-  const allPositions = [];
-  const coords = getValidHexCoords(BOARD_RADIUS);
-  for (const { q, r } of coords) {
-    for (let i = 0; i < 6; i++) {
-      allPositions.push({ q, r, triIndex: i, y: getCentroidY({ q, r, triIndex: i }) });
-    }
-  }
-  allPositions.sort((a, b) => a.y - b.y);
-
-  const moveLog = [];
-  let changed = true;
-  while (changed) {
-    changed = false;
-    const passMoves = [];
-    // Track pieces that just landed this pass — don't let them move again
-    const justLanded = new Set();
-
-    for (const pos of allPositions) {
-      const posKey = `${pos.q},${pos.r},${pos.triIndex}`;
-      if (justLanded.has(posKey)) continue;
-
-      const cell = newBoard.get(hexKey(pos.q, pos.r));
-      const tri = cell[pos.triIndex];
-      if (tri.color === -1) continue;
-
-      const triID = { q: pos.q, r: pos.r, triIndex: pos.triIndex };
-      const targets = getGravityTargets(triID, BOARD_RADIUS);
-
-      // Filter to empty targets (also skip positions just vacated by another piece
-      // that hasn't re-landed yet — but the board state handles this since we update in-place)
-      const emptyTargets = targets.filter(t => {
-        const tCell = newBoard.get(hexKey(t.q, t.r));
-        return tCell && tCell[t.triIndex].color === -1;
-      });
-
-      if (emptyTargets.length === 0) continue;
-
-      // Pick target: if multiple (top tris have 2 options), choose closest x
-      let bestTarget;
-      if (emptyTargets.length === 1) {
-        bestTarget = emptyTargets[0];
-      } else {
-        const curX = getCentroidX(triID);
-        let bestDx = Infinity;
-        for (const t of emptyTargets) {
-          const dx = Math.abs(getCentroidX(t) - curX);
-          if (dx < bestDx) {
-            bestDx = dx;
-            bestTarget = t;
-          }
-        }
-      }
-
-      // Move the piece
-      const tCell = newBoard.get(hexKey(bestTarget.q, bestTarget.r));
-      tCell[bestTarget.triIndex] = { ...tri, id: bestTarget };
-      cell[pos.triIndex] = { id: triID, color: -1, isPowerUp: null, isGlowing: false };
-      passMoves.push({ from: { ...triID }, to: { ...bestTarget } });
-      justLanded.add(`${bestTarget.q},${bestTarget.r},${bestTarget.triIndex}`);
-      changed = true;
-    }
-
-    if (passMoves.length > 0) {
-      moveLog.push(passMoves);
-    }
-  }
-
-  return { board: newBoard, moveLog };
-}
-
-export { BOARD_RADIUS, CLEAR_DURATION };
