@@ -9,7 +9,7 @@ import { stepGravity, spawnPiece, isResting } from './dropper.js';
 import { getInitialColors, spawnIntervalFor, checkProgression, checkWinCondition } from './progression.js';
 import { calculateScore, saveHighScore } from './scoring.js';
 
-export const FALL_STEP = 75;   // ms per row of falling
+export const FALL_STEP = 140;  // ms per row of falling
 export const CLEAR_TIME = 450; // ms a completed hex flashes before vanishing
 export const ROTATE_TIME = 120;
 
