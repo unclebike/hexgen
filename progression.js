@@ -19,9 +19,9 @@ export const HEXES_PER_LEVEL = 6;
 const WIN_HEXES = HEXES_PER_LEVEL * COLOR_PALETTE.length; // 48: six of each colour
 
 // Time between new triangles, in ms
-const INITIAL_SPAWN_INTERVAL = 800;
-const SPAWN_INTERVAL_STEP = 70;
-const MIN_SPAWN_INTERVAL = 300;
+const INITIAL_SPAWN_INTERVAL = 1800;
+const SPAWN_INTERVAL_STEP = 150;
+const MIN_SPAWN_INTERVAL = 700;
 
 export function getInitialColors() {
   return [0, 1];
