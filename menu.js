@@ -4,6 +4,8 @@
 import { BOARD_BG } from './progression.js';
 import { loadHighScores } from './scoring.js';
 
+const BUILD = 'build 2 · triangle lattice';
+
 const MODES = [
   { id: 'main', label: 'MAIN', desc: 'Clear all 8 colors' },
   { id: 'endless', label: 'ENDLESS', desc: 'Play forever' },
@@ -36,6 +38,11 @@ export function drawMenu(ctx, width, height) {
   ctx.font = '14px monospace';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
   ctx.fillText('a hexagonal puzzle', width / 2, height * 0.2 + 40);
+
+  // Build label, so it's obvious which version a cached browser is running
+  ctx.font = '10px monospace';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.fillText(BUILD, width / 2, height - 14);
 
   // Mode buttons
   const btnWidth = 200;
