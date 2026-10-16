@@ -51,8 +51,9 @@ public enum Dropper {
     /// The top cell of every column: where new triangles enter.
     public static let spawnCells: [Cell] = columns.map { $0[0] }
 
-    /// Bottom of each column first, so a falling stack moves together.
-    private static let gravityOrder = Grid.cells.sorted { $0.c > $1.c }
+    /// Bottom of each column first, so a falling stack moves together; ties go
+    /// top row first, the order the JS stable sort gives.
+    private static let gravityOrder = Grid.cells.sorted { $0.c != $1.c ? $0.c > $1.c : $0.r < $1.r }
 
     private static func isOpen(_ board: Board, _ cell: Cell) -> Bool {
         Grid.isCell(cell) && board[cell] == nil
