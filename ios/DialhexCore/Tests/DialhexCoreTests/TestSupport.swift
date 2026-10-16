@@ -72,4 +72,9 @@ extension GameEvent {
         if case .spawn = self { return true }
         return false
     }
+
+    var isClear: Bool {
+        if case .clear = self { return true }
+        return false
+    }
 }
