@@ -2,7 +2,7 @@
 // The game object is mutated in place. update() and the input handlers return
 // a list of events (clears, level-ups, game over) for audio and effects.
 
-import { SIZE, CELLS, isDial, nearestDial, cellCenter, key } from './grid.js';
+import { SIZE, CELLS, isDial, nearestDial, cellCenter, dialCells, key } from './grid.js';
 import { rotateDial } from './rotation.js';
 import { findHexes } from './hexdetect.js';
 import { stepGravity, spawnPiece, isResting } from './dropper.js';
@@ -57,6 +57,7 @@ export function update(game, dt) {
 
   // Finished clears leave holes for the triangles above to fall into
   for (const [k, p] of game.board) {
+    if (p.holdT > 0) p.holdT -= dt;
     if (p.clearT > 0) {
       p.clearT -= dt;
       if (p.clearT <= 0) game.board.delete(k);
@@ -153,7 +154,11 @@ export function rotate(game, dir) {
   if (game.phase !== 'playing') return [];
   const { k, j } = game.cursor;
   if (!rotateDial(game.board, k, j, dir)) return [];
-  game.rotAnim = { k, j, dir, t: 0 };
+  // Hold the turned triangles still until the turn has played out, so they
+  // don't fall mid-swing; only these pieces are drawn swinging.
+  const pieces = dialCells(k, j).map(({ r, c }) => game.board.get(key(r, c))).filter(Boolean);
+  for (const p of pieces) p.holdT = ROTATE_TIME;
+  game.rotAnim = { k, j, dir, t: 0, pieces: new Set(pieces) };
   return [{ type: 'rotate' }];
 }
 

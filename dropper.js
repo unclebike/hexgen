@@ -62,7 +62,8 @@ export function stepGravity(board) {
   const order = [...CELLS].sort((a, b) => b.c - a.c);
   for (const { r, c } of order) {
     const p = board.get(key(r, c));
-    if (!p || p.from || p.clearT > 0) continue; // already moved this step, or clearing
+    // Skip pieces that already moved this step, are clearing, or are mid-turn
+    if (!p || p.from || p.clearT > 0 || p.holdT > 0) continue;
     const move = nextMove(board, r, c);
     if (!move) continue;
     board.delete(key(r, c));

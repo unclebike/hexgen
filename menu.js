@@ -4,7 +4,7 @@
 import { BOARD_BG } from './progression.js';
 import { loadHighScores } from './scoring.js';
 
-const BUILD = 'build 5 · point-down bin';
+const BUILD = 'build 6 · steady turns';
 
 const MODES = [
   { id: 'main', label: 'MAIN', desc: 'Clear all 8 colors' },

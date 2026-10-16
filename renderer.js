@@ -1,6 +1,6 @@
 // renderer.js — Canvas drawing: the bin, falling triangles, the dial, and effects
 
-import { CELLS, SIZE, ROW_H, key, cellVertices, cellCenter, vertexXY, dialCells, dialOutline } from './grid.js';
+import { CELLS, SIZE, ROW_H, key, cellVertices, cellCenter, vertexXY, dialOutline } from './grid.js';
 import { COLOR_PALETTE, EMPTY_COLOR, BOARD_BG } from './progression.js';
 import { FALL_STEP, CLEAR_TIME, ROTATE_TIME } from './gamestate.js';
 
@@ -95,12 +95,12 @@ function binOutline() {
 function drawPieces(game) {
   const fallT = Math.min(1, game.fallTimer / FALL_STEP);
 
-  // The board already holds the turned dial; draw those six triangles rotated
+  // The board already holds the turned dial; draw the turned triangles rotated
   // back by the part of the 60° turn that hasn't played yet.
-  let rotKeys = null, pivot = null, angle = 0;
+  let rotPieces = null, pivot = null, angle = 0;
   if (game.rotAnim) {
     const { k, j, dir, t } = game.rotAnim;
-    rotKeys = new Set(dialCells(k, j).map(({ r, c }) => key(r, c)));
+    rotPieces = game.rotAnim.pieces;
     pivot = toScreen(vertexXY(k, j));
     angle = -dir * (Math.PI / 3) * (1 - easeOut(Math.min(1, t / ROTATE_TIME)));
   }
@@ -131,7 +131,7 @@ function drawPieces(game) {
       y: center.y + (v.y - center.y) * inset + dy,
     }));
 
-    const rotating = rotKeys && rotKeys.has(key(r, c));
+    const rotating = rotPieces && rotPieces.has(p);
     if (rotating) {
       ctx.save();
       ctx.translate(pivot.x, pivot.y);
