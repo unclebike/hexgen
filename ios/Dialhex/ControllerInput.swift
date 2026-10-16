@@ -221,7 +221,7 @@ final class ControllerInput {
         repeatTask?.cancel()
         held = (ObjectIdentifier(source), direction)
         emit(.move(direction))
-        repeatTask = Task { [weak self] in
+        repeatTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.repeatDelay)
             while !Task.isCancelled, let input = self {
                 input.emit(.move(direction))
