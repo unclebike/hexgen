@@ -255,3 +255,12 @@ public struct Game {
         }
     }
 }
+
+// MARK: - Testing
+
+extension Game {
+    /// Test hook: replace the board wholesale, so tests can set up a position.
+    mutating func setBoardForTesting(_ board: Board) {
+        self.board = board
+    }
+}
