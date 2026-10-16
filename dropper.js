@@ -2,49 +2,30 @@
 //
 // A triangle can't flip as it falls, so it moves diagonally one row at a time,
 // (r, c) → (r+1, c±1), which keeps its orientation. It alternates left and
-// right, so in open space it zig-zags straight down. A triangle that can't
-// fall slides along its row toward the nearest spot where it can, so the bin
-// fills level instead of piling up in the middle. It rests once it can do
-// neither.
+// right, so in open space it zig-zags straight down. It lands the moment its
+// next step is blocked by another triangle, even if there's a gap beside it.
+// Only the bin's slanted walls make it slide: when its next step would leave
+// the bin, it takes the other diagonal, running down along the wall.
 
 import { ROWS, CELLS, TOP_CELLS, isCell, key } from './grid.js';
 
 const POWER_CHANCE = 0.04;
 const rows = Array.from({ length: ROWS }, (_, r) => CELLS.filter(cell => cell.r === r));
 
-const isOpen = (board, r, c) => isCell(r, c) && !board.has(key(r, c));
-const canDrop = (board, r, c, dir) => isOpen(board, r + 1, c + dir);
-
-/**
- * Where the piece at (r, c) moves next, or null if it's resting.
- * Prefers falling (toward `zig` first), then sliding sideways toward the
- * nearest open drop along its row.
- */
+/** Where the piece at (r, c) moves next, or null if it has landed. */
 function nextMove(board, r, c, zig) {
   for (const dir of [zig, -zig]) {
-    if (canDrop(board, r, c, dir)) return { r: r + 1, c: c + dir, dir };
+    if (!isCell(r + 1, c + dir)) continue; // a wall: slide along it
+    if (board.has(key(r + 1, c + dir))) return null; // a triangle: land
+    return { r: r + 1, c: c + dir, dir };
   }
-  // Same-orientation neighbours along the row are two columns apart
-  for (let dist = 2; dist < 4 * ROWS; dist += 2) {
-    for (const dir of [zig, -zig]) {
-      const nc = c + dir * dist;
-      if (!isOpen(board, r, nc)) continue;
-      // The path to it must be clear too
-      let clear = true;
-      for (let d = 2; d < dist; d += 2) {
-        if (!isOpen(board, r, c + dir * d)) { clear = false; break; }
-      }
-      if (clear && (canDrop(board, r, nc, -1) || canDrop(board, r, nc, 1))) {
-        return { r, c: c + dir * 2, dir };
-      }
-    }
-  }
-  return null;
+  return null; // walls on both sides: the floor
 }
 
-/** A piece is resting when it has nowhere to fall or slide. */
+/** A piece is resting once it has landed. */
 export function isResting(board, r, c) {
-  return nextMove(board, r, c, 1) === null;
+  const p = board.get(key(r, c));
+  return nextMove(board, r, c, p ? p.zig : 1) === null;
 }
 
 /**
@@ -65,8 +46,7 @@ export function stepGravity(board, tick) {
       board.delete(key(r, c));
       board.set(key(move.r, move.c), p);
       p.from = { r, c };
-      // Alternate after a fall; keep heading the same way while sliding
-      p.zig = move.r > r ? -move.dir : move.dir;
+      p.zig = -move.dir; // alternate, so it zig-zags straight down
     }
   }
 }
