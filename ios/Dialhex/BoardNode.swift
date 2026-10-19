@@ -211,7 +211,7 @@ final class BoardNode: SKNode {
             let t = min(1, turn.elapsed / Game.rotateTime)
             let easeOut = 1 - (1 - t) * (1 - t)
             // SpriteKit angles are counter-clockwise; undo a clockwise turn
-            let angle = CGFloat(turn.direction.rawValue) * .pi / 3 * (1 - easeOut)
+            let angle = CGFloat(turn.direction.rawValue) * .pi / 3 * CGFloat(1 - easeOut)
             for id in turn.pieceIDs { turning[id] = (pivot, angle) }
         }
 
