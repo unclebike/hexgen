@@ -2,7 +2,7 @@
 // The game object is mutated in place. update() and the input handlers return
 // a list of events (clears, level-ups, game over) for audio and effects.
 
-import { SIZE, CELLS, isDial, nearestDial, cellCenter, key } from './grid.js';
+import { SIZE, CELLS, isDial, nearestDial, cellCenter, dialCells, key } from './grid.js';
 import { rotateDial } from './rotation.js';
 import { findHexes } from './hexdetect.js';
 import { stepGravity, spawnPiece, isResting } from './dropper.js';
@@ -73,7 +73,7 @@ export function update(game, dt) {
     }
     game.fallTimer -= FALL_STEP;
     game.tick++;
-    stepGravity(game.board);
+    stepGravity(game.board, heldCells(game));
 
     game.spawnTimer -= FALL_STEP;
     if (game.spawnTimer <= 0) {
@@ -92,7 +92,9 @@ export function update(game, dt) {
 }
 
 function detectClears(game, events) {
-  const hexes = findHexes(game.board, (r, c) => isResting(game.board, r, c));
+  // A hex counts once its triangles are still: landed, or held by the dial
+  const held = heldCells(game);
+  const hexes = findHexes(game.board, (r, c) => held.has(key(r, c)) || isResting(game.board, r, c));
   if (hexes.length === 0) return;
 
   const powers = [];
@@ -148,12 +150,23 @@ function endGame(game, events) {
   events.push({ type: 'gameover', won: game.won, newHighScore: saveHighScore(game.mode, game.score) });
 }
 
+/**
+ * The six cells under the dial. Gravity is suspended there, so the player
+ * can turn a hex without its triangles falling away; moving the dial off
+ * them lets them fall.
+ */
+function heldCells(game) {
+  return new Set(dialCells(game.cursor.k, game.cursor.j).map(({ r, c }) => key(r, c)));
+}
+
 /** Turn the dial. dir: 1 = clockwise, -1 = counter-clockwise. */
 export function rotate(game, dir) {
   if (game.phase !== 'playing') return [];
   const { k, j } = game.cursor;
   if (!rotateDial(game.board, k, j, dir)) return [];
-  game.rotAnim = { k, j, dir, t: 0 };
+  // Only the turned pieces are drawn swinging
+  const pieces = dialCells(k, j).map(({ r, c }) => game.board.get(key(r, c))).filter(Boolean);
+  game.rotAnim = { k, j, dir, t: 0, pieces: new Set(pieces) };
   return [{ type: 'rotate' }];
 }
 

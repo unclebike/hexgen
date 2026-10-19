@@ -6,7 +6,7 @@ import { skin, copy, weights, unlockedCount, skinCount } from './skins.js';
 import { drawLogo, drawOverlayEffects, getScale, sharpLines } from './renderer.js';
 import { drawText, drawLabel } from './hud.js';
 
-const BUILD = 'build 6 · brand';
+const BUILD = 'build 7 · brand';
 const MODES = ['main', 'endless', 'sprint'];
 
 let buttons = [];
