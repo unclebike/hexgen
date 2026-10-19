@@ -1,0 +1,83 @@
+{
+  "meta" : {
+    "version" : "2024-11-15"
+  },
+  "resources" : {
+    "leaderboardLocalizations" : {
+      "dialhex.endless" : [
+        {
+          "formatterOverride" : "INTEGER",
+          "formatterSuffix" : "points",
+          "formatterSuffixSingular" : "point",
+          "locale" : "en-GB",
+          "localID" : "dialhex.endless-en-GB",
+          "name" : "ENDLESS"
+        }
+      ],
+      "dialhex.main" : [
+        {
+          "formatterOverride" : "INTEGER",
+          "formatterSuffix" : "points",
+          "formatterSuffixSingular" : "point",
+          "locale" : "en-GB",
+          "localID" : "dialhex.main-en-GB",
+          "name" : "MAIN"
+        }
+      ],
+      "dialhex.sprint" : [
+        {
+          "formatterOverride" : "INTEGER",
+          "formatterSuffix" : "points",
+          "formatterSuffixSingular" : "point",
+          "locale" : "en-GB",
+          "localID" : "dialhex.sprint-en-GB",
+          "name" : "SPRINT"
+        }
+      ]
+    },
+    "leaderboards" : [
+      {
+        "activityProperties" : {
+
+        },
+        "archived" : false,
+        "defaultFormatter" : "INTEGER",
+        "referenceName" : "Spectrum",
+        "scoreRangeEnd" : "10000000",
+        "scoreRangeStart" : "0",
+        "scoreSortType" : "DESC",
+        "submissionType" : "BEST_SCORE",
+        "vendorIdentifier" : "dialhex.main",
+        "visibility" : "SHOW_FOR_ALL"
+      },
+      {
+        "activityProperties" : {
+
+        },
+        "archived" : false,
+        "defaultFormatter" : "INTEGER",
+        "referenceName" : "Endless",
+        "scoreRangeEnd" : "100000000",
+        "scoreRangeStart" : "0",
+        "scoreSortType" : "DESC",
+        "submissionType" : "BEST_SCORE",
+        "vendorIdentifier" : "dialhex.endless",
+        "visibility" : "SHOW_FOR_ALL"
+      },
+      {
+        "activityProperties" : {
+
+        },
+        "archived" : false,
+        "defaultFormatter" : "INTEGER",
+        "referenceName" : "Sprint",
+        "scoreRangeEnd" : "10000000",
+        "scoreRangeStart" : "0",
+        "scoreSortType" : "DESC",
+        "submissionType" : "BEST_SCORE",
+        "vendorIdentifier" : "dialhex.sprint",
+        "visibility" : "SHOW_FOR_ALL"
+      }
+    ]
+  }
+}

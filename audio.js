@@ -1,5 +1,8 @@
 // audio.js — Procedural Web Audio sound engine
-// All sounds generated with oscillators and filters — no audio files
+// All sounds generated with oscillators and filters — no audio files.
+// The active skin picks the tone colour: oscillator wave, octave, and whether the drone plays.
+
+import { skin } from './skins.js';
 
 let audioCtx = null;
 let masterGain = null;
@@ -7,17 +10,32 @@ let muted = false;
 let droneOsc = null;
 let droneLfo = null;
 
-// Base frequencies for color-mapped tones (C4 to C5, chromatic)
+// Base frequencies for colour-mapped tones (C4 to G4, chromatic), in unlock order
 const COLOR_FREQUENCIES = [
-  261.63, // C4  — green
-  277.18, // C#4 — orange
-  293.66, // D4  — yellow
-  311.13, // D#4 — red
-  329.63, // E4  — blue
-  349.23, // F4  — purple
-  369.99, // F#4 — cyan
-  392.00, // G4  — dark green
+  261.63, // C4
+  277.18, // C#4
+  293.66, // D4
+  311.13, // D#4
+  329.63, // E4
+  349.23, // F4
+  369.99, // F#4
+  392.00, // G4
 ];
+
+// Square and sawtooth carry far more energy than a sine; even them out
+const WAVE_GAIN = { sine: 1, triangle: 0.9, square: 0.4, sawtooth: 0.5 };
+
+/** The skin's oscillator wave, and a gain to keep it level with a sine. */
+function voice() {
+  const wave = (skin.sound && skin.sound.wave) || 'sine';
+  return { wave, gain: WAVE_GAIN[wave] || 1 };
+}
+
+/** A colour's tone, shifted by the skin's octave. */
+function colorFrequency(colorIndex) {
+  const octave = (skin.sound && skin.sound.octave) || 0;
+  return (COLOR_FREQUENCIES[colorIndex] || 261.63) * 2 ** octave;
+}
 
 /**
  * Initialize the audio context (must be called from user interaction).
@@ -69,13 +87,14 @@ export function playSound(type, params = {}) {
  * Triangle place sound: short sine tone mapped to color.
  */
 function playSoundPlace(colorIndex) {
-  const freq = COLOR_FREQUENCIES[colorIndex] || 261.63;
+  const freq = colorFrequency(colorIndex);
+  const v = voice();
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
 
-  osc.type = 'sine';
+  osc.type = v.wave;
   osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.setValueAtTime(0.15 * v.gain, audioCtx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
 
   osc.connect(gain);
@@ -116,16 +135,17 @@ function playSoundRotate() {
  * Hex clear sound: rising arpeggio + shimmer.
  */
 function playSoundClear(colorIndex) {
-  const baseFreq = COLOR_FREQUENCIES[colorIndex] || 261.63;
+  const baseFreq = colorFrequency(colorIndex);
   const notes = [baseFreq, baseFreq * 1.25, baseFreq * 1.5]; // root, third, fifth approx
+  const v = voice();
 
   notes.forEach((freq, i) => {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = 'sine';
+    osc.type = v.wave;
     osc.frequency.value = freq;
     const startTime = audioCtx.currentTime + i * 0.05;
-    gain.gain.setValueAtTime(0.2, startTime);
+    gain.gain.setValueAtTime(0.2 * v.gain, startTime);
     gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.1);
     osc.connect(gain);
     gain.connect(masterGain);
@@ -162,15 +182,16 @@ function playSoundClear(colorIndex) {
  * Level up sound: major chord.
  */
 function playSoundLevelUp(colorIndex) {
-  const root = COLOR_FREQUENCIES[colorIndex] || 261.63;
+  const root = colorFrequency(colorIndex);
   const chord = [root, root * 5 / 4, root * 3 / 2]; // major chord
+  const v = voice();
 
   chord.forEach(freq => {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = 'sine';
+    osc.type = v.wave;
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.15 * v.gain, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
     osc.connect(gain);
     gain.connect(masterGain);
@@ -212,6 +233,7 @@ function playSoundGameOver() {
 export function startDrone(colorCount) {
   if (!audioCtx) return;
   stopDrone();
+  if (skin.sound && skin.sound.drone === false) return;
 
   droneOsc = audioCtx.createOscillator();
   const droneGain = audioCtx.createGain();

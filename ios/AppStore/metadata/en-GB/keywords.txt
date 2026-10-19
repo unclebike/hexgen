@@ -1,0 +1,1 @@
+hexagon,triangle,rotate,match,colour,color,falling,block,logic,brain,minimal,controller,offline,dial
