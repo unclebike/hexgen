@@ -1,22 +1,11 @@
-// progression.js — Colors, levels, and pace
+// progression.js — Levels and pace
+// The colours themselves belong to the active skin (skins.js, skins.json).
 
-// Color palette in order of introduction
-export const COLOR_PALETTE = [
-  '#4CAF50', // 0: green
-  '#FF9800', // 1: orange
-  '#FFEB3B', // 2: yellow
-  '#F44336', // 3: red
-  '#2196F3', // 4: blue
-  '#9C27B0', // 5: purple
-  '#00BCD4', // 6: cyan
-  '#2E7D32', // 7: dark green
-];
-
-export const EMPTY_COLOR = '#1a1a2e';
-export const BOARD_BG = '#0f0f23';
+// Piece colours, introduced one per level
+export const PIECE_COUNT = 8;
 
 export const HEXES_PER_LEVEL = 6;
-const WIN_HEXES = HEXES_PER_LEVEL * COLOR_PALETTE.length; // 48: six of each colour
+const WIN_HEXES = HEXES_PER_LEVEL * PIECE_COUNT; // 48: six of each colour
 
 // Time between new triangles, in ms
 const INITIAL_SPAWN_INTERVAL = 1800;
@@ -36,7 +25,7 @@ export function spawnIntervalFor(level) {
  * Mutates the game. Returns true if it levelled up.
  */
 export function checkProgression(game) {
-  if (game.hexesThisLevel < HEXES_PER_LEVEL || game.activeColors.length >= COLOR_PALETTE.length) return false;
+  if (game.hexesThisLevel < HEXES_PER_LEVEL || game.activeColors.length >= PIECE_COUNT) return false;
   game.activeColors = [...game.activeColors, game.activeColors.length];
   game.hexesThisLevel -= HEXES_PER_LEVEL;
   game.level = game.activeColors.length;

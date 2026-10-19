@@ -104,7 +104,10 @@ final class TapTests: XCTestCase {
         XCTAssertEqual(events, [.rotate])
         XCTAssertEqual(colors(game.board), layout([(5, 6, 3)]))
         XCTAssertEqual(game.cursor.vertex, vertex(6, 6))
-        XCTAssertEqual(game.dialTurn, DialTurn(vertex: vertex(6, 6), direction: .clockwise, elapsed: 0))
+        XCTAssertEqual(
+            game.dialTurn,
+            DialTurn(vertex: vertex(6, 6), direction: .clockwise, pieceIDs: [testPieceBaseID], elapsed: 0)
+        )
     }
 
     func testTappingNearTheCurrentDialTurnsIt() {
@@ -229,6 +232,33 @@ final class GameRuleTests: XCTestCase {
         XCTAssertEqual(spawnSteps, [1, 13, 26])
     }
 
+    func testSpeedScalesSpawnPace() {
+        // Same step count as normal, just with longer or shorter steps
+        for speed in Speed.allCases {
+            var game = Game(mode: .endless, speed: speed, rng: SplitMix64(seed: 9))
+            XCTAssertEqual(game.stepTime, Game.fallStep * speed.pace, accuracy: 1e-9)
+            var spawnSteps: [Int] = []
+            for step in 1...26 {
+                let events = game.update(by: game.stepTime)
+                if events.contains(where: \.isSpawn) { spawnSteps.append(step) }
+            }
+            XCTAssertEqual(spawnSteps, [1, 13, 26], "\(speed)")
+        }
+        // A normal-length step isn't enough to drop anything at slow speed
+        var slow = Game(mode: .endless, speed: .slow, rng: SplitMix64(seed: 9))
+        XCTAssertEqual(slow.update(by: Game.fallStep), [])
+    }
+
+    func testSpeedScalesPoints() {
+        let points = Speed.allCases.map { speed -> Int in
+            var game = Game(mode: .endless, speed: speed, rng: SplitMix64(seed: 7))
+            game.setBoardForTesting(GameFixtures.sixHexBoard())
+            _ = game.update(by: game.stepTime)
+            return game.score
+        }
+        XCTAssertEqual(points, [600, 1200, 1800])
+    }
+
     func testLevelUpAfterSixHexes() {
         // JS: the six-hex board scores 6 × 100 × 2, adds colour 2, and the
         // faster spawn interval (1650 ms) moves the third spawn from step 26 to 25
@@ -339,6 +369,34 @@ final class GameRuleTests: XCTestCase {
         ]))
     }
 
+    func testSwapPowerReportsItsColours() {
+        let hex: [(Int, Int, Int)] = Grid.dialCells(vertex(6, 10)).map { ($0.r, $0.c, 0) }
+        let others: [(Int, Int, Int)] = [(6, 8, 1), (6, 7, 1), (5, 8, 1)]
+        var board = makeBoard(hex + others)
+        board[cell(6, 11)]?.power = .swap
+        var game = Game(mode: .endless, rng: SplitMix64(seed: 13))
+        game.setBoardForTesting(board)
+        XCTAssertNil(game.lastSwap)
+        let events = game.update(by: Game.fallStep)
+        XCTAssertTrue(events.contains(.power(.swap)))
+        guard let swap = game.lastSwap else { return XCTFail("no swap reported") }
+        XCTAssertNotEqual(swap.from, swap.to)
+        XCTAssertTrue(game.activeColors.contains(swap.from) && game.activeColors.contains(swap.to))
+        // Nothing still of the old colour survives, bar the hex that's clearing
+        XCTAssertFalse(game.board.values.contains { $0.color == swap.from && !$0.isClearing })
+    }
+
+    func testDialHoldsAFloatingPiece() {
+        var game = Game(mode: .endless, rng: SplitMix64(seed: 13))
+        let held = Grid.dialCells(game.cursor.vertex).min { $0.c < $1.c }!
+        // A lone piece under the dial with room below it would fall, but for the dial
+        game.setBoardForTesting(makeBoard([(held.r, held.c, 0)]))
+        XCTAssertTrue(game.isHoldingPiece)
+        // Off the dial it's just falling
+        game.setBoardForTesting(makeBoard([(4, 0, 0)]))
+        XCTAssertFalse(game.isHoldingPiece)
+    }
+
     func testFullBinEndsTheGame() {
         // JS: a full bin with no hexes → gameover(won: false) on the next spawn
         var game = Game(mode: .main, rng: SplitMix64(seed: 3))
@@ -357,6 +415,59 @@ final class GameRuleTests: XCTestCase {
         XCTAssertEqual(game.phase, .gameOver)
         XCTAssertEqual(game.cursor.vertex, vertex(6, 6))
         XCTAssertEqual(game.board, board)
+    }
+
+    func testAssistedPaceEasesIn() {
+        // Unassisted games keep the JS pace
+        for level in 2...8 {
+            XCTAssertEqual(Progression.spawnInterval(level: level, assisted: false),
+                           Progression.spawnInterval(level: level))
+        }
+        // Slow opening, then each colour arrives two levels before its speed-up
+        let assisted = (2...8).map { Progression.spawnInterval(level: $0, assisted: true) }
+        let expected = [2.52, 1.8, 1.8, 1.65, 1.5, 1.35, 1.2]
+        for (got, want) in zip(assisted, expected) { XCTAssertEqual(got, want, accuracy: 1e-9) }
+    }
+
+    func testAssistedGameOpensSlower() {
+        // 2.52 s between spawns is 18 steps of 140 ms (rounding may land it a step
+        // either way), against 12–13 normally
+        var game = Game(mode: .endless, assisted: true, rng: SplitMix64(seed: 9))
+        XCTAssertEqual(game.stepTime, Game.fallStep, accuracy: 1e-9) // falling isn't slowed
+        var spawnSteps: [Int] = []
+        for step in 1...40 {
+            if game.update(by: Game.fallStep).contains(where: \.isSpawn) { spawnSteps.append(step) }
+        }
+        XCTAssertEqual(spawnSteps.first, 1)
+        XCTAssertEqual(spawnSteps.count, 3)
+        for (a, b) in zip(spawnSteps, spawnSteps.dropFirst()) { XCTAssertTrue((17...19).contains(b - a), "\(spawnSteps)") }
+    }
+
+    func testAssistedGameScoresAsNormal() {
+        var game = Game(mode: .endless, assisted: true, rng: SplitMix64(seed: 7))
+        game.setBoardForTesting(GameFixtures.sixHexBoard())
+        _ = game.update(by: Game.fallStep)
+        XCTAssertEqual(game.score, 1200)
+        XCTAssertEqual(game.level, 3)
+    }
+
+    func testAssistedGameIsRescuedFromAFullBinOnce() {
+        let full = makeBoard(Grid.cells.map { ($0.r, $0.c, $0.r % 2 == 0 ? 5 : 6) })
+        var game = Game(mode: .main, assisted: true, rng: SplitMix64(seed: 3))
+        game.setBoardForTesting(full)
+        XCTAssertFalse(game.rescued)
+        XCTAssertEqual(game.update(by: Game.fallStep), [.power(.drain)])
+        XCTAssertTrue(game.rescued)
+        XCTAssertEqual(game.phase, .playing)
+        // The bottom two triangle-heights are empty
+        XCTAssertFalse(game.board.keys.contains { Grid.center(of: $0).x > Double(Grid.size - 2) })
+
+        // The second full bin ends it, at the next spawn
+        game.setBoardForTesting(full)
+        var events: [GameEvent] = []
+        for _ in 1...30 where events.isEmpty { events = game.update(by: Game.fallStep) }
+        XCTAssertEqual(events, [.gameOver(won: false)])
+        XCTAssertEqual(game.phase, .gameOver)
     }
 
     func testBlockedTopsThatAreStillClearingDoNotEndTheGame() {

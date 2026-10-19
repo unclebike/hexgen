@@ -1,0 +1,269 @@
+{
+  "_about": "Brand tokens shared by the web game and the iOS app. Colours are #RRGGBB. Line weights are multiples of the board scale (points per triangle side), except the 1px hairline. fontScale (default 1) enlarges every text size for fonts with a small x-height.",
+
+  "weights": {
+    "hairline": 1,
+    "hairlineAlpha": 0.08,
+    "line": 0.07,
+    "heavy": 0.14
+  },
+
+  "marks": ["dot", "spokes", "ring", "frame", "trio", "corners", "tri", "target"],
+
+  "logo": {
+    "_about": "HEXGEN built from the game's own triangles, on the board's sideways lattice (triangles point left and right, as in the bin), at half a board triangle per cell. Each glyph is rows of '#' (filled) and '.' (empty), one character per column; a cell points right when row + column is even. Strokes run along the lattice's 30° diagonals, after the Merkur typeface by Malwin Béla Hürkey; glyphs are four columns by nine rows. Glyphs sit gap columns apart and lines lineGap rows apart, kept even so every glyph keeps its triangles' directions.",
+    "word": "HEXGEN",
+    "lines": ["HEX", "GEN"],
+    "gap": 2,
+    "lineGap": 3,
+    "glyphs": {
+      "H": ["...#", "#..#", "#..#", "#.##", "####", "##.#", "#..#", "#..#", "#..."],
+      "E": [".##.", "####", "#...", "##..", "....", "##..", "#...", "#.##", ".##."],
+      "X": ["...#", "#..#", "#..#", "####", ".##.", "####", "#..#", "#..#", "#..."],
+      "G": [".##.", "####", "#..#", "#...", "#.#.", "#.##", "#..#", "#.##", ".##."],
+      "N": ["...#", "...#", "#..#", "##.#", "####", "#.##", "#..#", "#...", "#..."]
+    }
+  },
+
+  "copy": {
+    "tagline": "a hexagonal puzzle",
+    "topScores": "TOP SCORES",
+    "loading": "loading",
+    "modes": {
+      "main": { "label": "SPECTRUM", "detail": "all 8 colours" },
+      "endless": { "label": "ENDLESS", "detail": "no end" },
+      "sprint": { "label": "SPRINT", "detail": "3 minutes" }
+    },
+    "best": "best",
+    "hexes": "hexes",
+    "skin": "SKIN",
+    "speed": {
+      "label": "SPEED",
+      "levels": { "slow": "SLOW", "normal": "NORMAL", "fast": "FAST" },
+      "hints": { "slow": "half points", "normal": "full points", "fast": "one and a half times the points" }
+    },
+    "locked": "locked",
+    "paused": "paused.",
+    "resume": "RESUME",
+    "leftHanded": "LEFT-HANDED",
+    "rightHanded": "RIGHT-HANDED",
+    "menu": "MENU",
+    "binFull": "bin full.",
+    "cleared": "cleared.",
+    "timeUp": "time.",
+    "newBest": "new best.",
+    "unlocked": "new skin: %@.",
+    "walkthrough": {
+      "_about": "The app's first game opens with the bot playing until it clears a few hexes, then handing over. takeOver fills in the input's {confirm}.",
+      "watch": "watch: six of one colour under the dial clears a hex.",
+      "takeOver": "{confirm} or move to take over",
+      "yourTurn": "your turn."
+    },
+    "callouts": {
+      "_about": "The app's in-play callouts: one quiet line beside the bin when play shifts, never over it. detail explains it the first few times it shows. {level}, {points}, and {seconds} fill in.",
+      "rescue": { "title": "saved.", "detail": "the bin was full, so it emptied the bottom two rows. once a game, while you're learning." },
+      "levelUp": { "title": "level {level}.", "detail": "a new colour joins. every hex now scores {points}." },
+      "drain": { "title": "drain.", "detail": "the glowing piece emptied the bottom two rows." },
+      "swap": { "title": "swap.", "detail": "the glowing piece turned one colour into another." },
+      "hint": { "title": "one turn away.", "detail": "the faint outline marks a hex you can finish with a single turn." },
+      "glow": { "title": "a glowing piece.", "detail": "clear it in a hex to fire its power." },
+      "held": { "title": "held.", "detail": "nothing falls under the dial. park a piece there." },
+      "danger": { "title": "bin filling.", "detail": "the music holds its breath until you clear space." },
+      "finale": { "title": "{seconds} seconds left." }
+    },
+    "tapForMenu": "tap for menu",
+    "tapToContinue": "tap or press space to continue",
+    "touchHint": "tap a spot to grab it, tap again to turn",
+    "keysHint": "keys: WASD move · Q/E turn · 1/2/3 start · K skin",
+    "inputs": {
+      "_about": "The app's hints and tips follow the input last used. Each names its buttons; text with {confirm}, {cancel}, {resume}, {sides}, or {pick} fills them in. hint is the controls line; touch and keyboard use touchHint and keysHint above, which the web game shares.",
+      "touch": { "name": "touch", "confirm": "tap", "cancel": "MENU", "resume": "RESUME", "sides": "left/right", "pick": "tap" },
+      "keyboard": { "name": "keyboard", "confirm": "return", "cancel": "esc", "resume": "space", "sides": "left/right arrows", "pick": "pick" },
+      "gamepad": { "name": "controller", "hint": "d-pad move · A/Y/R turn · X/L turn back · menu pauses", "confirm": "A", "cancel": "B", "resume": "A or menu", "sides": "left/right", "pick": "pick" },
+      "remote": { "name": "remote", "hint": "swipe move · click turn · play/pause turn back · back pauses", "confirm": "click", "cancel": "back", "resume": "click", "sides": "swipe left/right", "pick": "pick" },
+      "phone": { "name": "phone", "hint": "touch the bin to move the dial · spin the hex to turn · tap it to turn forward", "confirm": "A", "cancel": "B", "resume": "A or pause", "sides": "the arrows", "pick": "pick" }
+    },
+    "versus": {
+      "label": "VERSUS",
+      "detail": "2–4 players, or 2 in co-op",
+      "title": "versus.",
+      "join": "press {confirm} to join",
+      "ready": "ready",
+      "dropped": "controller lost",
+      "rules": {
+        "sprintRace": { "label": "SPRINT RACE", "detail": "best score in 3 minutes" },
+        "survival": { "label": "SURVIVAL", "detail": "last bin standing" },
+        "firstToWin": { "label": "FIRST TO WIN", "detail": "first to clear all 8 colours" }
+      },
+      "coopModes": {
+        "main": { "label": "CO-OP SPECTRUM", "detail": "all 8 colours, together" },
+        "endless": { "label": "CO-OP ENDLESS", "detail": "together, until the bin fills" },
+        "sprint": { "label": "CO-OP SPRINT", "detail": "together, for 3 minutes" }
+      },
+      "lobbyHint": "{confirm} join · {cancel} leave · {sides} rule · {confirm} again to start",
+      "needTwo": "waiting for a second player",
+      "coopTwoOnly": "co-op is for exactly two players",
+      "phoneHint": "or play on a phone: open Hexgen, choose CONNECT, enter %@",
+      "out": "out.",
+      "wins": "%@ wins.",
+      "tie": "tie: %@.",
+      "coopWon": "you both won.",
+      "coopOver": "team score %@.",
+      "lost": "%@ lost their controller.",
+      "lostHint": "{confirm} on a free controller takes over · {confirm} on yours plays on without them",
+      "matchOver": "{confirm} rematch · {cancel} back to the lobby",
+      "pausedHint": "{confirm} resume · {cancel} end the match"
+    },
+    "online": {
+      "label": "ONLINE",
+      "detail": "co-op with a Game Center friend",
+      "signedOut": "sign in to Game Center first",
+      "restricted": "multiplayer is turned off",
+      "title": "online.",
+      "you": "you",
+      "friend": "a friend",
+      "waiting": "waiting for %@ to start",
+      "inviteHint": "{confirm} invite a friend · {sides} mode · {cancel} back",
+      "hostHint": "{confirm} start · {sides} mode · {cancel} leave",
+      "guestHint": "{cancel} leave",
+      "invite": "INVITE",
+      "start": "START",
+      "leave": "LEAVE",
+      "resume": "RESUME",
+      "again": "AGAIN",
+      "pausedHint": "{confirm} resume · {cancel} leave",
+      "matchOver": "{confirm} play again · {cancel} leave",
+      "left": "%@ left the game.",
+      "hostLeft": "%@ left, so the game ended.",
+      "versionMismatch": "that invite is from another version of Hexgen. update both to play."
+    },
+    "controller": {
+      "label": "CONTROLLER",
+      "short": "CONNECT",
+      "detail": "pair a controller, or play on an Apple TV",
+      "menuHint": "play from your phone: open Hexgen, choose CONNECT, enter %@",
+      "title": "controller.",
+      "searching": "looking for an Apple TV…",
+      "codePrompt": "enter the code on the TV",
+      "connecting": "connecting…",
+      "waiting": "waiting for the match",
+      "paused": "paused.",
+      "over": "match over.",
+      "won": "you won.",
+      "rejected": "the TV said no: %@",
+      "lost": "lost the TV.",
+      "leave": "LEAVE",
+      "hubTitle": "connect.",
+      "gamepads": "controllers",
+      "noGamepads": "none connected. pair a controller in Settings \u203a Bluetooth, then press any button on it.",
+      "keyboard": "keyboard",
+      "connected": "ready",
+      "tv": "apple tv",
+      "tvDetail": "open Hexgen on the TV, then use this phone as its controller.",
+      "tvButton": "PLAY ON TV",
+      "tvNeedsUpdate": "needs iOS 26 or later",
+      "back": "BACK"
+    },
+    "howTo": {
+      "label": "HOW TO PLAY",
+      "short": "RULES",
+      "detail": "the rules",
+      "title": "how to play.",
+      "back": "BACK",
+      "rules": [
+        { "art": "bin", "title": "the bin.", "body": "triangles fall into the bin. when there's no room for the next one, the game is over." },
+        { "art": "dial", "title": "the dial.", "body": "the dial covers six triangles. turn it to spin them around its centre. gravity stops under the dial, so it can hold pieces in place." },
+        { "art": "hex", "title": "hexes.", "body": "fill all six triangles under a dial with one colour and the hex clears. every hex scores 100 × your level." },
+        { "art": "levels", "title": "levels.", "body": "every 6 hexes adds a new colour, and triangles arrive faster." },
+        { "art": "glow", "title": "glowing pieces.", "body": "clear a glowing triangle to fire its power. drain empties the bottom two rows; swap turns one colour into another." },
+        { "art": "modes", "title": "modes.", "body": "SPECTRUM: six hexes of all 8 colours wins. ENDLESS: play until the bin fills. SPRINT: as many hexes as you can in 3 minutes." },
+        { "art": "touch", "title": "touch.", "body": "tap a spot to grab it, tap again to turn. twist two fingers on the board to turn either way." }
+      ]
+    }
+  },
+
+  "unlocks": {
+    "_about": "Every MAIN win and every lifetime-hexes milestone unlocks the next skin, in list order.",
+    "milestones": [50, 150, 300, 600, 1000]
+  },
+
+  "skins": [
+    {
+      "id": "base",
+      "background": "#18181A",
+      "empty": "#222225",
+      "ink": "#F2EEE6",
+      "mark": "#18181A",
+      "pieces": ["#FFD23F", "#2F5BFF", "#FF4A1C", "#F2EEE6", "#17D6B0", "#B98CFF", "#E0177A", "#8A8F98"],
+      "fonts": { "display": "DialhexArchivoExpanded-ExtraBold", "text": "DialhexArchivoExpanded-Medium", "digits": "DialhexJetBrainsMono-Bold" },
+      "stroke": {},
+      "effects": {},
+      "sound": { "wave": "sine", "octave": 0, "drone": true }
+    },
+    {
+      "id": "riso",
+      "background": "#F1EADB",
+      "empty": "#E5DCC8",
+      "ink": "#3D5588",
+      "mark": "#F1EADB",
+      "pieces": ["#FFE800", "#0078BF", "#FF48B0", "#1D1D1B", "#00838A", "#765BA7", "#FF7477", "#00A95C"],
+      "fonts": { "display": "DialhexArchivoCondensed-ExtraBold", "text": "DialhexArchivoExpanded-Medium", "digits": "DialhexJetBrainsMono-Bold" },
+      "stroke": {},
+      "effects": { "misregister": 0.06, "grain": 0.09 },
+      "sound": { "wave": "triangle", "octave": 1, "drone": true }
+    },
+    {
+      "id": "crt",
+      "background": "#050805",
+      "empty": "#0C140D",
+      "ink": "#8CFF9E",
+      "mark": "#050805",
+      "pieces": ["#FFB000", "#3D7BFF", "#FF3B30", "#E8FFE8", "#00E5FF", "#C77DFF", "#FF2BD6", "#7A8A7C"],
+      "fonts": { "display": "DialhexVT323-Regular", "text": "DialhexVT323-Regular", "digits": "DialhexVT323-Regular" },
+      "fontScale": 1.4,
+      "stroke": {},
+      "effects": { "scanlines": 0.22, "glow": 0.25 },
+      "sound": { "wave": "square", "octave": 0, "drone": true }
+    },
+    {
+      "id": "flash",
+      "background": "#F3E6C8",
+      "empty": "#E8D6AE",
+      "ink": "#141210",
+      "mark": "#F3E6C8",
+      "pieces": ["#F2B705", "#1D3557", "#C8202B", "#141210", "#1E7B3A", "#E8A87C", "#7A3E1D", "#8C8778"],
+      "fonts": { "display": "AlfaSlabOne-Regular", "text": "DialhexArchivoExpanded-Medium", "digits": "DialhexJetBrainsMono-Bold" },
+      "stroke": { "outline": "line", "outlineColor": "#141210" },
+      "effects": {},
+      "sound": { "wave": "sawtooth", "octave": -1, "drone": true }
+    },
+    {
+      "id": "mono",
+      "background": "#111111",
+      "empty": "#1C1C1C",
+      "ink": "#EDEDED",
+      "mark": "#111111",
+      "pieces": ["#F0F0F0", "#5E5E5E", "#8A0303", "#B4B4B4", "#3A3A3A", "#D2D2D2", "#8C8C8C", "#262626"],
+      "fonts": { "display": "DialhexJetBrainsMono-Bold", "text": "DialhexJetBrainsMono-Bold", "digits": "DialhexJetBrainsMono-Bold" },
+      "stroke": { "markScale": 1.35 },
+      "effects": {},
+      "sound": { "wave": "sine", "octave": -1, "drone": false }
+    },
+    {
+      "id": "acid",
+      "background": "#000000",
+      "empty": "#0A0A0A",
+      "ink": "#C6FF00",
+      "mark": "#000000",
+      "pieces": [],
+      "fonts": { "display": "DialhexArchivoExpanded-Black", "text": "DialhexArchivoExpanded-Medium", "digits": "DialhexJetBrainsMono-Bold" },
+      "stroke": {},
+      "effects": {
+        "_about": "One colour at a time: ink is the current strobe hue and the pieces are tints of it (positive mixes toward white, negative toward black). Every hex clear hard-cuts to the next hue, with a one-frame flash, at most three a second.",
+        "strobe": ["#C6FF00", "#FF2E88", "#00F0FF", "#FF7A00"],
+        "tints": [0, -0.5, 0.6, -0.3, 0.85, -0.65, 0.3, -0.4]
+      },
+      "sound": { "wave": "square", "octave": 1, "drone": true }
+    }
+  ]
+}

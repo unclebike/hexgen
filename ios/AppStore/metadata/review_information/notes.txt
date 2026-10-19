@@ -1,0 +1,19 @@
+Hexgen is a single-player puzzle game. No account of our own, no in-app purchases, no ads. Game Center sign-in is optional: if you're signed in, finished scores go to a leaderboard for each mode (open them from the Game Center access point on the menu). Everything else (best scores, unlocked skins) stays on the device. The game works fully offline and without Game Center.
+
+HOW TO PLAY
+1. Tap MAIN, ENDLESS or SPRINT on the menu.
+2. Triangles fall into the bin. Tap any point where triangles meet to grab it (the dial), then tap it again, use the on-screen turn buttons, or twist with two fingers to turn the six triangles around it.
+3. Make all six triangles around a point one colour to clear a hex. Every six hexes adds a new colour.
+4. The two-bar button at the bottom pauses. From pause you can go back to the menu.
+5. The game also plays in landscape. There, tapping low on the left or right turns the dial.
+
+SPRINT is the quickest way to see a whole game: it ends after three minutes.
+
+SKINS
+The SKIN button on the menu cycles through the visual themes you've unlocked. Only the first one is open on a fresh install. More unlock after a MAIN win or after clearing 50, 150, 300, 600 and 1000 hexes in total.
+
+GAME CONTROLLERS AND KEYBOARDS
+Fully supported but optional. Controller: d-pad moves, A turns, Menu pauses. Keyboard: WASD moves, Q/E turns, Space pauses, 1/2/3 start a mode.
+
+PHOTOSENSITIVITY
+The last skin, "acid", which is locked on a fresh install, flashes the screen briefly when a hex clears. The flash is capped at three per second.

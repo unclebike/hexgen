@@ -23,7 +23,7 @@ public struct Cell: Hashable, Sendable {
     public init(r: Int, c: Int) { self.r = r; self.c = c }
 }
 
-public struct Vertex: Hashable, Sendable {
+public struct Vertex: Hashable, Sendable, Codable {
     public var k: Int
     public var j: Int
     public init(k: Int, j: Int) { self.k = k; self.j = j }

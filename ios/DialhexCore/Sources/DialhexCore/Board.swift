@@ -84,12 +84,14 @@ public enum Dropper {
         nextMove(board, from: cell) == nil
     }
 
-    /// Move every loose piece one step. Each piece records where it came from.
-    static func stepGravity(_ board: inout Board) {
+    /// Move every loose piece one step. Pieces already in a held cell stay put,
+    /// but other pieces can still fall into empty held cells.
+    static func stepGravity(_ board: inout Board, heldCells: Set<Cell> = []) {
         for cell in board.keys { board[cell]?.from = nil }
         var moved = Set<Int>()
         for cell in gravityOrder {
-            guard let piece = board[cell], !moved.contains(piece.id), !piece.isClearing,
+            guard !heldCells.contains(cell), let piece = board[cell],
+                  !moved.contains(piece.id), !piece.isClearing,
                   let target = nextMove(board, from: cell) else { continue }
             board[cell] = nil
             var fallen = piece
@@ -99,17 +101,26 @@ public enum Dropper {
         }
     }
 
+    /// How often a gentle spawn picks a colour a nearly finished hex is waiting for.
+    static let gentleColorChance = 0.35
+
     /// Drop a new triangle into the top of a random open column; a full
-    /// column just stops taking new ones.
+    /// column just stops taking new ones. A `gentle` spawn (an assisted game)
+    /// leans toward emptier columns and toward colours a hex is waiting for.
     static func spawn(
-        into board: inout Board, colors: [Int], id: Int, using rng: inout some RandomNumberGenerator
+        into board: inout Board, colors: [Int], id: Int, gentle: Bool = false,
+        using rng: inout some RandomNumberGenerator
     ) -> SpawnResult {
         let open = spawnCells.filter { board[$0] == nil }
-        guard let cell = open.randomElement(using: &rng) else {
+        guard let cell = gentle ? roomiest(open, on: board, using: &rng) : open.randomElement(using: &rng) else {
             return spawnCells.allSatisfy { isResting(board, $0) } ? .full : .wait
         }
         let hasPower = board.values.contains { $0.power != nil }
-        let color = colors.randomElement(using: &rng)!
+        var color = colors.randomElement(using: &rng)!
+        if gentle, Double.random(in: 0..<1, using: &rng) < gentleColorChance,
+           let wanted = wantedColors(on: board, among: colors).randomElement(using: &rng) {
+            color = wanted
+        }
         var power: Power?
         if !hasPower && Double.random(in: 0..<1, using: &rng) < powerChance {
             power = Bool.random(using: &rng) ? .drain : .swap
@@ -117,6 +128,32 @@ public enum Dropper {
         // Enter from just above the bin
         board[cell] = Piece(id: id, color: color, power: power, from: Cell(r: cell.r, c: cell.c - 2))
         return .spawned
+    }
+
+    /// One of the open column tops, weighted by how many empty cells its column has.
+    private static func roomiest(
+        _ open: [Cell], on board: Board, using rng: inout some RandomNumberGenerator
+    ) -> Cell? {
+        let weights = open.map { top in Double(columns[top.r].count { board[$0] == nil }) }
+        var pick = Double.random(in: 0..<max(1, weights.reduce(0, +)), using: &rng)
+        for (cell, weight) in zip(open, weights) {
+            pick -= weight
+            if pick < 0 { return cell }
+        }
+        return open.last
+    }
+
+    /// Colours that are the only thing missing from a dial: four or more of
+    /// the colour around a vertex, and the rest of its cells empty.
+    static func wantedColors(on board: Board, among colors: [Int]) -> Set<Int> {
+        var wanted = Set<Int>()
+        for dial in Grid.dials {
+            let pieces = Grid.dialCells(dial).compactMap { board[$0] }
+            guard pieces.count >= 4, pieces.count < 6, let color = pieces.first?.color,
+                  colors.contains(color), pieces.allSatisfy({ $0.color == color && !$0.isClearing }) else { continue }
+            wanted.insert(color)
+        }
+        return wanted
     }
 }
 
@@ -137,16 +174,21 @@ public enum Dial {
         return true
     }
 
-    /// Every dial position holding a completed Hex. Only resting triangles count.
-    static func findHexes(_ board: Board) -> [Hex] {
-        Grid.dials.compactMap { v in
-            let cells = Grid.dialCells(v)
-            guard let first = board[cells[0]] else { return nil }
-            let complete = cells.allSatisfy { cell in
-                guard let p = board[cell] else { return false }
-                return p.color == first.color && !p.isClearing && Dropper.isResting(board, cell)
-            }
-            return complete ? Hex(center: v, color: first.color, cells: cells) : nil
+    /// Every dial position holding a completed Hex. Held triangles count as
+    /// settled even when they would otherwise still be falling.
+    static func findHexes(_ board: Board, heldCells: Set<Cell> = []) -> [Hex] {
+        Grid.dials.compactMap { hex(board, at: $0, heldCells: heldCells) }
+    }
+
+    /// The completed Hex around one dial position, if there is one.
+    static func hex(_ board: Board, at v: Vertex, heldCells: Set<Cell> = []) -> Hex? {
+        let cells = Grid.dialCells(v)
+        guard let first = board[cells[0]] else { return nil }
+        let complete = cells.allSatisfy { cell in
+            guard let p = board[cell] else { return false }
+            return p.color == first.color && !p.isClearing
+                && (heldCells.contains(cell) || Dropper.isResting(board, cell))
         }
+        return complete ? Hex(center: v, color: first.color, cells: cells) : nil
     }
 }

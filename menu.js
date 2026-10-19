@@ -1,20 +1,17 @@
-// menu.js — Title screen and mode selection
+// menu.js — Title screen, mode selection, and skin choice
 // Canvas-drawn menu (no HTML elements)
 
-import { BOARD_BG } from './progression.js';
 import { loadHighScores } from './scoring.js';
+import { skin, copy, weights, unlockedCount, skinCount } from './skins.js';
+import { drawLogo, drawOverlayEffects, getScale, sharpLines } from './renderer.js';
+import { drawText, drawLabel } from './hud.js';
 
-const BUILD = 'build 5 · point-down bin';
-
-const MODES = [
-  { id: 'main', label: 'MAIN', desc: 'Clear all 8 colors' },
-  { id: 'endless', label: 'ENDLESS', desc: 'Play forever' },
-  { id: 'sprint', label: 'SPRINT', desc: '3 minutes, max score' },
-];
+const BUILD = 'build 6 · brand';
+const MODES = ['main', 'endless', 'sprint'];
 
 let buttons = [];
-let selectedMode = null;
 let hoverIndex = -1;
+let logoBox = null; // where the logo was drawn, for the hidden unlock taps
 
 /**
  * Draw the menu screen.
@@ -24,89 +21,79 @@ let hoverIndex = -1;
  * @returns {boolean} true if menu is active
  */
 export function drawMenu(ctx, width, height) {
-  ctx.fillStyle = BOARD_BG;
+  const text = copy();
+  const wt = weights(getScale());
+  ctx.save();
+  sharpLines(ctx);
+  ctx.fillStyle = skin.background;
   ctx.fillRect(0, 0, width, height);
 
-  // Title
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  ctx.font = 'bold 48px monospace';
-  ctx.fillStyle = 'white';
-  ctx.fillText('DIALHEX', width / 2, height * 0.2);
-
-  ctx.font = '14px monospace';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-  ctx.fillText('a hexagonal puzzle', width / 2, height * 0.2 + 40);
+  // Logo, built from the game's triangles
+  const logoY = height * 0.19;
+  // Two lines on the bin's sideways lattice: about 1.2× as wide as tall. Fit it between
+  // the top and the tagline above the buttons (which start at 38% of the height).
+  const logoW = Math.min(width * 0.6, 300, Math.max(0, height * 0.38 - 68) * 1.2);
+  const logoH = drawLogo(ctx, width / 2, logoY, logoW);
+  logoBox = { x: width / 2 - logoW / 2, y: logoY - logoH / 2, w: logoW, h: logoH };
+  drawText(ctx, text.tagline, width / 2, logoY + logoH / 2 + 24, { size: 13, alpha: 0.6 });
 
   // Build label, so it's obvious which version a cached browser is running
-  ctx.font = '10px monospace';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.fillText(BUILD, width / 2, height - 14);
+  drawText(ctx, BUILD, width / 2, height - 14, { size: 10, alpha: 0.6 });
 
-  // Mode buttons
-  const btnWidth = 200;
-  const btnHeight = 50;
-  const btnGap = 20;
-  const startY = height * 0.4;
-
-  buttons = [];
+  // Mode buttons, then the skin button
+  const btnWidth = 220;
+  const btnHeight = 52;
+  const btnGap = 18;
+  const startY = height * 0.38;
   const scores = loadHighScores();
 
-  MODES.forEach((mode, i) => {
+  const items = [
+    ...MODES.map(id => ({ id, label: text.modes[id].label, detail: text.modes[id].detail, best: scores[id] })),
+    { id: 'skin', label: text.skin, detail: `${skin.id} · ${unlockedCount()}/${skinCount()}` },
+  ];
+
+  buttons = [];
+  items.forEach((item, i) => {
     const x = width / 2 - btnWidth / 2;
-    const y = startY + i * (btnHeight + btnGap);
-    buttons.push({ x, y, w: btnWidth, h: btnHeight, mode: mode.id });
+    const y = startY + i * (btnHeight + btnGap) + (item.id === 'skin' ? btnGap : 0);
+    buttons.push({ x, y, w: btnWidth, h: btnHeight, id: item.id });
 
-    const isHover = hoverIndex === i;
-
-    // Button background
-    ctx.fillStyle = isHover ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
+    // Outlined, sharp-cornered; the selected one takes the heavy weight
+    const selected = hoverIndex === i;
+    ctx.fillStyle = skin.empty;
     ctx.fillRect(x, y, btnWidth, btnHeight);
-
-    // Button border
-    ctx.strokeStyle = isHover ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = skin.ink;
+    ctx.lineWidth = selected ? wt.heavy : wt.line;
     ctx.strokeRect(x, y, btnWidth, btnHeight);
 
-    // Label
-    ctx.font = 'bold 18px monospace';
-    ctx.fillStyle = 'white';
-    ctx.fillText(mode.label, width / 2, y + btnHeight / 2 - 6);
+    drawLabel(ctx, item.label, width / 2, y + btnHeight / 2 - 7, { size: 17 });
+    drawText(ctx, item.detail, width / 2, y + btnHeight / 2 + 13, { size: 11, alpha: 0.6 });
 
-    // Description
-    ctx.font = '10px monospace';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.fillText(mode.desc, width / 2, y + btnHeight / 2 + 12);
-
-    // High score
-    const hs = scores[mode.id];
-    if (hs > 0) {
-      ctx.font = '10px monospace';
-      ctx.fillStyle = '#FFD700';
-      ctx.textAlign = 'right';
-      ctx.fillText(`best: ${hs}`, x + btnWidth - 8, y + 14);
-      ctx.textAlign = 'center';
+    if (item.best > 0) {
+      drawText(ctx, `${text.best} ${item.best}`, x + btnWidth - 8, y + 12, { role: 'digits', size: 10, align: 'right' });
     }
   });
 
   // Controls hint
-  ctx.font = '11px monospace';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-  const controlY = height * 0.85;
-  ctx.fillText('tap a spot to grab it, tap again to turn', width / 2, controlY);
-  ctx.fillText('keys: WASD move · Q/E turn · 1/2/3 start', width / 2, controlY + 18);
+  const controlY = height * 0.88;
+  drawText(ctx, text.touchHint, width / 2, controlY, { size: 11, alpha: 0.6 });
+  drawText(ctx, text.keysHint, width / 2, controlY + 18, { size: 11, alpha: 0.6 });
 
+  drawOverlayEffects(ctx, width, height);
+  ctx.restore();
   return true;
 }
 
 /**
- * Handle click/tap on menu — returns selected mode or null.
+ * Handle click/tap on menu — returns 'main' | 'endless' | 'sprint' | 'skin' | 'logo', or null.
  */
 export function handleMenuClick(x, y) {
+  if (logoBox && x >= logoBox.x && x <= logoBox.x + logoBox.w && y >= logoBox.y && y <= logoBox.y + logoBox.h) {
+    return 'logo';
+  }
   for (const btn of buttons) {
     if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
-      return btn.mode;
+      return btn.id;
     }
   }
   return null;
@@ -130,6 +117,5 @@ export function handleMenuHover(x, y) {
  * Reset menu state.
  */
 export function resetMenu() {
-  selectedMode = null;
   hoverIndex = -1;
 }

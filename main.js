@@ -1,20 +1,44 @@
 // main.js — Game loop: menus, input, game updates, effects, and drawing
 
 import { createGame, update, rotate, moveCursorTo, moveCursorDir, togglePause } from './gamestate.js';
-import { initRenderer, renderFrame, resize, toScreen, toUnit } from './renderer.js';
+import { initRenderer, renderFrame, resize, toScreen, toUnit, drawOverlayEffects } from './renderer.js';
 import { AnimationManager } from './animations.js';
 import { drawHUD, drawGameOver, drawPause, touchButtons } from './hud.js';
 import { initInput, drainInputQueue, setInputActive } from './input.js';
 import { initAudio, resumeAudio, playSound, startDrone, stopDrone } from './audio.js';
 import { drawMenu, handleMenuClick, handleMenuHover, resetMenu } from './menu.js';
-import { COLOR_PALETTE } from './progression.js';
 import { nearestDial, vertexXY } from './grid.js';
+import { loadBrand, skin, hardCut, resetStrobe, recordProgress, cycleSkin, unlockAll, unlockedCount, skinCount } from './skins.js';
+
+const HARD_CUT_FLASH = 50; // ms the screen flashes on a hard cut, about three frames
 
 let appState = 'menu'; // 'menu' | 'playing' | 'gameover'
 let game = null;
 let animations = new AnimationManager();
 let lastTime = 0;
 let isNewHighScore = false;
+let unlockedSkins = []; // ids unlocked by the game that just ended
+let progressRecorded = false;
+let flashTimer = 0;
+
+// Hidden shortcut: tap the logo 20 times in a row to open every skin
+const LOGO_TAPS_TO_UNLOCK = 20;
+const LOGO_TAP_GAP = 1500; // ms allowed between taps
+let logoTaps = 0;
+let lastLogoTap = 0;
+
+function logoTapped() {
+  const now = performance.now();
+  logoTaps = now - lastLogoTap <= LOGO_TAP_GAP ? logoTaps + 1 : 1;
+  lastLogoTap = now;
+  if (logoTaps < LOGO_TAPS_TO_UNLOCK || unlockedCount() >= skinCount()) return;
+  logoTaps = 0;
+  unlockAll();
+  playSound('levelup', { colorIndex: 0 });
+}
+
+// Colours, copy, and fonts must be ready before anything is drawn
+await loadBrand();
 
 const canvas = document.getElementById('gameCanvas');
 const { ctx } = initRenderer(canvas);
@@ -27,11 +51,23 @@ function startGame(mode) {
   game = createGame(mode);
   animations = new AnimationManager();
   isNewHighScore = false;
+  unlockedSkins = [];
+  progressRecorded = false;
+  flashTimer = 0;
+  resetStrobe();
   setInputActive(true);
   startDrone(game.activeColors.length);
 }
 
+/** Bank this game's hexes (and a MAIN win) toward skin unlocks, once per game. */
+function recordGame() {
+  if (!game || progressRecorded) return;
+  progressRecorded = true;
+  unlockedSkins = recordProgress({ hexes: game.hexesCleared, mainWin: game.won });
+}
+
 function toMenu() {
+  recordGame();
   appState = 'menu';
   resetMenu();
   stopDrone();
@@ -46,8 +82,10 @@ function handleMenuTap(clientX, clientY) {
   resumeAudio();
   if (appState === 'menu') {
     const rect = canvas.getBoundingClientRect();
-    const mode = handleMenuClick(clientX - rect.left, clientY - rect.top);
-    if (mode) startGame(mode);
+    const choice = handleMenuClick(clientX - rect.left, clientY - rect.top);
+    if (choice === 'logo') logoTapped();
+    else if (choice === 'skin') cycleSkin();
+    else if (choice) startGame(choice);
   } else if (appState === 'gameover') {
     toMenu();
   }
@@ -77,6 +115,11 @@ canvas.addEventListener('mousemove', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (appState !== 'menu') return;
+  if (e.code === 'KeyK') {
+    e.preventDefault();
+    cycleSkin();
+    return;
+  }
   const mode = { Digit1: 'main', Digit2: 'endless', Digit3: 'sprint' }[e.code];
   if (!mode) return;
   e.preventDefault();
@@ -128,8 +171,9 @@ function handleGameEvents(events) {
         for (const hex of event.hexes) {
           playSound('clear', { colorIndex: hex.color });
           const center = toScreen(vertexXY(hex.k, hex.j));
-          animations.spawnClearParticles(center.x, center.y, COLOR_PALETTE[hex.color]);
+          animations.spawnClearParticles(center.x, center.y, skin.pieces[hex.color]);
         }
+        if (hardCut()) flashTimer = HARD_CUT_FLASH;
         animations.triggerShake();
         break;
       case 'power':
@@ -143,6 +187,7 @@ function handleGameEvents(events) {
         playSound('gameover');
         stopDrone();
         isNewHighScore = event.newHighScore;
+        recordGame();
         appState = 'gameover';
         setInputActive(false);
         break;
@@ -170,8 +215,14 @@ function gameLoop(timestamp) {
 
       renderFrame(game, animations);
       drawHUD(ctx, game, w, h);
-      if (game.phase === 'gameover') drawGameOver(ctx, game, w, h, isNewHighScore);
+      if (game.phase === 'gameover') drawGameOver(ctx, game, w, h, isNewHighScore, unlockedSkins);
       else if (game.phase === 'paused') drawPause(ctx, w, h);
+      if (flashTimer > 0) {
+        flashTimer -= dt;
+        ctx.fillStyle = skin.ink;
+        ctx.fillRect(0, 0, w, h);
+      }
+      drawOverlayEffects(ctx, w, h);
     } else {
       drawMenu(ctx, w, h);
     }
