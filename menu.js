@@ -40,11 +40,18 @@ export function drawMenu(ctx, width, height) {
   // Build label, so it's obvious which version a cached browser is running
   drawText(ctx, BUILD, width / 2, height - 14, { size: 10, alpha: 0.6 });
 
-  // Mode buttons, then the skin button
-  const btnWidth = 220;
-  const btnHeight = 52;
-  const btnGap = 18;
+  // Mode buttons, then the skin button. Four buttons and their gaps (an extra one
+  // before the skin button) must end above the controls hint, which sits at 88%
+  // of the height: on a short screen (a phone on its side) they shrink to fit,
+  // and once too squat for two lines they drop the detail line.
   const startY = height * 0.38;
+  const controlY = height * 0.88;
+  const room = controlY - 12 - startY;
+  const fit = Math.max(0.5, Math.min(1, room / (4 * 52 + 4 * 18)));
+  const btnWidth = 220;
+  const btnHeight = Math.round(52 * fit);
+  const btnGap = Math.round(18 * fit);
+  const twoLines = fit >= 0.85;
   const scores = loadHighScores();
 
   const items = [
@@ -66,8 +73,12 @@ export function drawMenu(ctx, width, height) {
     ctx.lineWidth = selected ? wt.heavy : wt.line;
     ctx.strokeRect(x, y, btnWidth, btnHeight);
 
-    drawLabel(ctx, item.label, width / 2, y + btnHeight / 2 - 7, { size: 17 });
-    drawText(ctx, item.detail, width / 2, y + btnHeight / 2 + 13, { size: 11, alpha: 0.6 });
+    if (twoLines) {
+      drawLabel(ctx, item.label, width / 2, y + btnHeight / 2 - 7, { size: 17 });
+      drawText(ctx, item.detail, width / 2, y + btnHeight / 2 + 13, { size: 11, alpha: 0.6 });
+    } else {
+      drawLabel(ctx, item.label, width / 2, y + btnHeight / 2, { size: Math.round(17 * Math.max(fit, 0.8)) });
+    }
 
     if (item.best > 0) {
       drawText(ctx, `${text.best} ${item.best}`, x + btnWidth - 8, y + 12, { role: 'digits', size: 10, align: 'right' });
@@ -75,7 +86,6 @@ export function drawMenu(ctx, width, height) {
   });
 
   // Controls hint
-  const controlY = height * 0.88;
   drawText(ctx, text.touchHint, width / 2, controlY, { size: 11, alpha: 0.6 });
   drawText(ctx, text.keysHint, width / 2, controlY + 18, { size: 11, alpha: 0.6 });
 
