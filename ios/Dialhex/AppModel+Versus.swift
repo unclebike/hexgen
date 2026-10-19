@@ -423,7 +423,10 @@ extension AppModel {
             case .gameOver(let won):
                 if !won { sound.play(.gameOver) } // a win resolves home in the music instead
                 for player in everyone { haptic(won ? .levelUp : .gameOver, for: player) }
-                recordMatch()
+                // An online guest banks from the snapshot that ends the game instead
+                // (`guestReceived`): the host sends this event first, so `coop` is
+                // still the snapshot before the last clears
+                if !isOnlineGuest { recordMatch() }
                 phoneScreensChanged()
             }
         }
@@ -434,7 +437,7 @@ extension AppModel {
 
     /// Bank the match toward skin unlocks: the best board's hexes (the shared
     /// one in co-op), and a MAIN win if a winner had one.
-    private func recordMatch() {
+    func recordMatch() {
         if let game = coop {
             bankProgress(hexes: game.hexesCleared, mainWin: game.won)
             return

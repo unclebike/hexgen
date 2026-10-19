@@ -255,9 +255,15 @@ extension AppModel {
         case .state(let seq, let ack, let snapshot):
             // A new game: the first one, or a rematch after the last ended
             if var replica, !(replica.game.phase == .gameOver && snapshot.phase == .playing) {
+                let wasOver = replica.game.phase == .gameOver
                 replica.receive(seq: seq, ack: ack, snapshot: snapshot)
                 self.replica = replica
                 coop = replica.game
+                // Bank the game once, from the host's final board and result
+                if !wasOver && replica.game.phase == .gameOver {
+                    recordMatch()
+                    phoneScreensChanged()
+                }
             } else if seq > (replica?.stateSeq ?? 0) {
                 beginGuestGame(CoopReplica(seq: seq, ack: ack, snapshot: snapshot))
             }
