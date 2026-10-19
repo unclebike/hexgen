@@ -43,3 +43,21 @@ swift test
 
 The game pauses itself when the app leaves the foreground or the controller
 disconnects.
+
+## Apple TV
+
+The `DialhexTV` target builds the same app for tvOS (same bundle ID, for a
+universal purchase). It starts from `DialhexTV/TVApp.swift`, which hosts the
+SwiftUI root in a `GCEventViewController` so the remote's input goes to the game;
+only on the top-level menu does the system get it, so Back returns Home. The UI
+is laid out at half the TV's size and drawn at double.
+
+| Action | Siri Remote |
+| --- | --- |
+| Move the dial | Swipe (hold to repeat), or click the clickpad's edge |
+| Turn clockwise | Click (the centre, on the clickpad remote) |
+| Turn counter-clockwise | Play/Pause |
+| Pause / back | Back |
+
+Gamepads work as on iPhone. The iPhone's Control Center remote plays like the
+Siri Remote.

@@ -1,4 +1,6 @@
 // Haptics.swift — Device haptics (UIFeedbackGenerator) plus controller rumble (CoreHaptics)
+//
+// Apple TV has no device haptics, so there only the controller rumbles.
 
 import CoreHaptics
 import GameController
@@ -8,18 +10,22 @@ enum HapticEvent { case rotate, clear(hexes: Int), power, levelUp, gameOver }
 
 @MainActor
 final class Haptics {
+    #if os(iOS)
     private let light = UIImpactFeedbackGenerator(style: .light)
     private let medium = UIImpactFeedbackGenerator(style: .medium)
     private let heavy = UIImpactFeedbackGenerator(style: .heavy)
     private let rigid = UIImpactFeedbackGenerator(style: .rigid)
     private let notification = UINotificationFeedbackGenerator()
+    #endif
 
     private weak var controller: GCController?
     /// Created lazily for `controller`; dropped (and rebuilt on next play) when it stops or resets.
     private var engine: CHHapticEngine?
 
     init() {
+        #if os(iOS)
         light.prepare()
+        #endif
     }
 
     /// The controller to rumble; nil = rumble the device only.
@@ -38,6 +44,7 @@ final class Haptics {
     // MARK: - Device
 
     private func playDevice(_ event: HapticEvent) {
+        #if os(iOS)
         switch event {
         case .rotate:
             light.impactOccurred()
@@ -53,6 +60,7 @@ final class Haptics {
         case .gameOver:
             notification.notificationOccurred(.error)
         }
+        #endif
     }
 
     // MARK: - Controller

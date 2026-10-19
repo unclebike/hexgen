@@ -1,0 +1,35 @@
+Triangles fall into a six-sided bin. Grab any point where six triangles meet and turn them round it. Get all six to one colour and they close into a hex and clear.
+
+Every six hexes, a new colour joins the bin, from two up to eight, and the triangles come faster. Let the bin fill and the game is over.
+
+THREE MODES
+• MAIN: clear 48 hexes, bring in all eight colours, and win.
+• ENDLESS: no end. Just you and the bin.
+• SPRINT: three minutes. Score what you can.
+
+Points climb with every new colour in play. Look out for glowing triangles: clear one and it either drains the bottom of the bin or turns every triangle of one colour into another.
+
+SIX SKINS TO UNLOCK
+Every MAIN win, and every milestone of lifetime hexes cleared, opens the next skin. Each one brings its own palette, type and sound:
+• base: dark and bright, the original
+• riso: risograph ink and paper grain
+• crt: green phosphor and scanlines
+• flash: heavy outlines and old-school colour
+• mono: greyscale with one red
+• acid: one strobing colour at a time
+
+BUILT TO READ AT A GLANCE
+Every colour carries its own mark (a dot, a ring, spokes and more), so you never have to tell pieces apart by colour alone.
+
+LEADERBOARDS
+Every mode has its own Game Center leaderboard. Sign in to see where you rank. You can play without signing in.
+
+PLAY IT YOUR WAY
+• Portrait or landscape, on iPhone and iPad.
+• Touch: tap a point to grab it, tap again to turn. Use the turn buttons, or twist with two fingers. In landscape, tap low on either side to turn.
+• Game controllers: Xbox, PlayStation, MFi and other extended gamepads, with rumble. On PlayStation controllers, the light bar glows the newest colour.
+• Keyboards: WASD or the arrow keys to move, Q and E to turn, 1, 2 and 3 to start a mode.
+• Haptics, plus a synthesised sound that changes as each colour joins.
+
+NO ADS. NO TRACKING. NO PURCHASES.
+Hexgen works offline and collects no data. Game Center is optional.

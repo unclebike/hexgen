@@ -1,13 +1,17 @@
 // SoundEngine.swift — Procedural sound engine (port of audio.js)
 // All sounds are synthesized into PCM buffers (no audio files) and played through AVAudioEngine.
 // Filters are AVAudioUnitEQ bands, polyphony is a pool of player nodes, master gain is the main mixer.
+// The active skin picks the tone colour: oscillator wave, octave, and whether the pad plays
+// (skins.json still calls it the drone). The music's notes come from the `Conductor`, scheduled
+// ahead on the audio clock; the sounds here are the effects around it. A score with a groove
+// adds drums and vinyl crackle, both low-passed, and gives the pad a tape wobble.
 
 import AVFoundation
+import DialhexCore
 
 enum Sound {
-    case place(color: Int)     // a new triangle enters
     case rotate
-    case clear(color: Int)
+    case shimmer               // a clear's or level-up's sparkle; the music plays the notes
     case levelUp(color: Int)
     case gameOver
 }
@@ -16,16 +20,43 @@ private let sampleRate = 44_100.0
 private let masterVolume: Float = 0.5
 private let mutedKey = "dialhex_muted"
 
-// Base frequencies for color-mapped tones (C4 to C5, chromatic)
+/// The music's mix, in one place for tuning by ear.
+private enum Mix {
+    /// Peak gain of one voice note (before the wave's level correction).
+    static let voice = 0.12
+    /// Gain of each pad tone; four sound at once.
+    static let pad = 0.035
+    /// Seconds a pad takes to fade in, and to fade out into the next.
+    static let padFade = 0.35
+    /// Notes the skin's octave would push below this (in Hz) go up an octave instead:
+    /// phone and TV speakers can't play much lower.
+    static let lowest = 100.0
+
+    /// The groove's drums, peak gains: an undertone, under the voices.
+    static let kick = 0.22
+    static let snare = 0.08
+    /// A ghost note's gain, as a share of the snare's.
+    static let ghost = 0.3
+    static let hat = 0.025
+    static let accent = 0.04
+    static let crackle = 0.05
+    /// Where the drums and crackle are cut off, for a dusty, sampled sound.
+    static let drumTone: Float = 6000
+    /// The pad's tape wobble, for scores with a groove: how far its pitch drifts (a share of it), and how often.
+    static let wobbleDepth = 0.004
+    static let wobbleRate = 0.5
+}
+
+// Base frequencies for colour-mapped tones (C4 to G4, chromatic), in unlock order
 private let colorFrequencies: [Double] = [
-    261.63, // C4  — green
-    277.18, // C#4 — orange
-    293.66, // D4  — yellow
-    311.13, // D#4 — red
-    329.63, // E4  — blue
-    349.23, // F4  — purple
-    369.99, // F#4 — cyan
-    392.00, // G4  — dark green
+    261.63, // C4
+    277.18, // C#4
+    293.66, // D4
+    311.13, // D#4
+    329.63, // E4
+    349.23, // F4
+    369.99, // F#4
+    392.00, // G4
 ]
 
 @MainActor
@@ -33,9 +64,15 @@ final class SoundEngine {
     private let format: AVAudioFormat
     private var graph: AudioGraph
     private var buffers: [String: AVAudioPCMBuffer] = [:]   // rendered lazily, once per key
-    private var droneColorCount: Int?                        // non-nil while the drone should play
     private var shimmerVariant = 0
+    private var crackleVariant = 0
     private var observers: [NSObjectProtocol] = []           // engine lives for the app's lifetime
+    private var activating = false                           // a session activation is in flight
+
+    /// The skin's tone colour. Buffers are cached per style, so switching is cheap after the first play.
+    var style = SkinSpec.Sound(wave: .sine, octave: 0, drone: true)
+    /// The music has a groove: the pad wobbles like tape.
+    var lofi = false
 
     /// Persisted in UserDefaults under "dialhex_muted".
     var isMuted: Bool {
@@ -56,19 +93,38 @@ final class SoundEngine {
     }
 
     /// Start (or restart after an interruption) the audio engine. Safe to call repeatedly.
+    /// The session is activated in the background, so sounds played meanwhile are skipped.
     func start() {
-        guard !graph.engine.isRunning else { return }
+        guard !graph.engine.isRunning, !activating else { return }
+        activating = true
+        // Session calls can block while the system arbitrates audio, so keep them off the main thread
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let active = Self.activateSession()
+            await self?.sessionActivated(active)
+        }
+    }
+
+    /// Ambient: mixes with the user's music and respects the silent switch.
+    nonisolated private static func activateSession() -> Bool {
         do {
-            // Ambient: mixes with the user's music and respects the silent switch
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.ambient)
             try session.setActive(true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func sessionActivated(_ active: Bool) {
+        activating = false
+        guard active, !graph.engine.isRunning else { return }
+        do {
             try graph.engine.start()
         } catch {
             return // audio unavailable — silent mode; retried on the next start()/play()
         }
         graph.restartPlayers()
-        if let colorCount = droneColorCount { loopDrone(colorCount) }
     }
 
     func play(_ sound: Sound) {
@@ -77,24 +133,12 @@ final class SoundEngine {
         guard graph.engine.isRunning else { return }
 
         switch sound {
-        case .place(let color):
-            // Triangle place: short sine tone mapped to color
-            let (c, f) = tone(color)
-            graph.tones.play(cachedBuffer("place\(c)") { renderNotes($0, [Note(.sine, f, length: 0.08, gain: 0.15)]) })
-
         case .rotate:
             // Rotation: soft white noise click, linear fade, through a 2 kHz bandpass
             graph.clicks.play(cachedBuffer("rotate") { renderNotes($0, [Note(.noise, length: 0.02, gain: 0.1, decay: .linear)]) })
 
-        case .clear(let color):
-            // Hex clear: rising arpeggio (root, third, fifth approx), 50 ms apart
-            let (c, f) = tone(color)
-            graph.tones.play(cachedBuffer("clear\(c)") { format in
-                renderNotes(format, [1, 1.25, 1.5].enumerated().map { i, ratio in
-                    Note(.sine, f * ratio, at: Double(i) * 0.05, length: 0.1, gain: 0.2)
-                })
-            })
-            // Shimmer: high white noise with fade, starting at +0.15 s (baked in as leading silence).
+        case .shimmer:
+            // High white noise with fade, starting at +0.15 s (baked in as leading silence).
             // A few noise variants so simultaneous clears don't sum coherently.
             shimmerVariant = (shimmerVariant + 1) % 4
             graph.shimmer.play(cachedBuffer("shimmer\(shimmerVariant)") {
@@ -104,8 +148,9 @@ final class SoundEngine {
         case .levelUp(let color):
             // Level up: major chord
             let (c, f) = tone(color)
-            graph.tones.play(cachedBuffer("levelUp\(c)") { format in
-                renderNotes(format, [1, 5.0 / 4, 3.0 / 2].map { Note(.sine, f * $0, length: 0.5, gain: 0.15) })
+            let (wave, level) = voice
+            graph.tones.play(cachedBuffer("levelUp\(c)\(styleKey)") { format in
+                renderNotes(format, [1, 5.0 / 4, 3.0 / 2].map { Note(wave, f * $0, length: 0.5, gain: 0.15 * level) })
             })
 
         case .gameOver:
@@ -118,32 +163,69 @@ final class SoundEngine {
         }
     }
 
-    /// Background drone: 40 Hz sine with vibrato at `colorCount` Hz (1 Hz per color).
-    func startDrone(colorCount: Int) {
-        droneColorCount = colorCount
-        if graph.engine.isRunning { loopDrone(colorCount) } else { start() }
-    }
+    /// The conductor's notes, each at its delay from now. Voices use the skin's wave and octave;
+    /// the pad plays only for skins with a drone.
+    func play(_ notes: [MusicNote]) {
+        guard !isMuted, !notes.isEmpty else { return }
+        start()
+        guard graph.engine.isRunning else { return }
 
-    func stopDrone() {
-        droneColorCount = nil
-        graph.drone.stop()
+        let (wave, level) = voice
+        for note in notes {
+            switch note.part {
+            case .pad:
+                guard style.drone else { continue }
+                // Rounded to 10 ms so the cache holds one buffer per chord voicing and speed
+                let length = (note.length * 100).rounded() / 100
+                let freqs = note.pitches.map(frequency)
+                let wobble = lofi
+                graph.pads.play(cachedBuffer("pad\(note.pitches)-\(length)\(styleKey)\(wobble ? "-tape" : "")") {
+                    renderPad($0, freqs, length: length, wobble: wobble)
+                }, after: note.delay)
+            case .voice:
+                for pitch in note.pitches {
+                    graph.music.play(cachedBuffer("note\(pitch)-\(note.length)\(styleKey)") {
+                        renderNotes($0, [Note(wave, frequency(pitch), length: note.length, gain: Mix.voice * level)])
+                    }, after: note.delay)
+                }
+            case .drum(.crackle):
+                // A few variants, so the pops don't repeat every bar
+                crackleVariant = (crackleVariant + 1) % 3
+                let length = (note.length * 100).rounded() / 100
+                graph.crackle.play(cachedBuffer("crackle\(crackleVariant)-\(length)") {
+                    renderCrackle($0, length: length)
+                }, after: note.delay)
+            case .drum(let drum):
+                graph.drums.play(cachedBuffer("drum\(drum)") { renderDrum($0, drum) }, after: note.delay)
+            }
+        }
     }
 
     // MARK: - Private
 
-    private func loopDrone(_ colorCount: Int) {
-        let drone = graph.drone
-        drone.stop()
-        guard let buffer = cachedBuffer("drone\(colorCount)", { renderDrone($0, vibratoHz: colorCount) }) else { return }
-        drone.scheduleBuffer(buffer, at: nil, options: .loops, completionHandler: nil)
-        drone.play()
-    }
-
-    /// Color index → (cache index, frequency); unknown colors fall back to C4 like the JS.
+    /// Color index → (cache index, frequency, shifted by the skin's octave); unknown colors fall back to C4 like the JS.
     private func tone(_ color: Int) -> (Int, Double) {
         let c = colorFrequencies.indices.contains(color) ? color : 0
-        return (c, colorFrequencies[c])
+        return (c, colorFrequencies[c] * pow(2, Double(style.octave)))
     }
+
+    /// MIDI note → Hz, shifted by the skin's octave but kept above `Mix.lowest`.
+    private func frequency(_ midi: Int) -> Double {
+        let hz = 440 * pow(2, Double(midi - 69) / 12 + Double(style.octave))
+        return hz < Mix.lowest ? hz * 2 : hz
+    }
+
+    /// The skin's wave, and a gain that keeps it level with a sine (square and sawtooth carry far more energy).
+    private var voice: (Note.Wave, Double) {
+        switch style.wave {
+        case .sine: return (.sine, 1)
+        case .triangle: return (.triangle, 0.9)
+        case .square: return (.square, 0.4)
+        case .sawtooth: return (.sawtooth, 0.5)
+        }
+    }
+
+    private var styleKey: String { "-\(style.wave.rawValue)\(style.octave)" }
 
     private func cachedBuffer(_ key: String, _ make: (AVAudioFormat) -> AVAudioPCMBuffer?) -> AVAudioPCMBuffer? {
         if let cached = buffers[key] { return cached }
@@ -196,26 +278,29 @@ private final class AudioGraph {
     let clicks: VoicePool   // rotate noise → bandpass 2 kHz
     let shimmer: VoicePool  // clear shimmer noise → highpass 4 kHz
     let buzz: VoicePool     // game-over sawtooths → lowpass 1 kHz
-    let drone: AVAudioPlayerNode
+    let music: VoicePool    // the conductor's voices, unfiltered
+    let pads: VoicePool     // the conductor's pad: two, so each unit's chord crossfades into the next
+    let drums: VoicePool    // the groove's drums → lowpass
+    let crackle: VoicePool  // a bar of vinyl crackle at a time → lowpass
 
     init(format: AVAudioFormat) {
         let engine = AVAudioEngine()
         self.engine = engine
         tones = VoicePool(engine, size: 8, format: format)
+        music = VoicePool(engine, size: 16, format: format)
+        pads = VoicePool(engine, size: 2, format: format)
+        drums = VoicePool(engine, size: 8, format: format, filter: (type: .lowPass, frequency: Mix.drumTone, bandwidth: 1))
+        crackle = VoicePool(engine, size: 2, format: format, filter: (type: .lowPass, frequency: Mix.drumTone, bandwidth: 1))
         // Web Audio bandpass Q 1 ≈ 1.39 octaves: BW = 2·asinh(1/2Q)/ln 2
         clicks = VoicePool(engine, size: 2, format: format, filter: (type: .bandPass, frequency: 2000, bandwidth: 1.39))
         // Plain (non-resonant) high/low pass; bandwidth is ignored for these types
         shimmer = VoicePool(engine, size: 4, format: format, filter: (type: .highPass, frequency: 4000, bandwidth: 1))
         buzz = VoicePool(engine, size: 1, format: format, filter: (type: .lowPass, frequency: 1000, bandwidth: 1))
-        let drone = AVAudioPlayerNode()
-        engine.attach(drone)
-        engine.connect(drone, to: engine.mainMixerNode, format: format)
-        self.drone = drone
     }
 
     /// Players stop when the engine does; after a (re)start they must be played again.
     func restartPlayers() {
-        for pool in [tones, clicks, shimmer, buzz] { pool.restart() }
+        for pool in [tones, clicks, shimmer, buzz, music, pads, drums, crackle] { pool.restart() }
     }
 }
 
@@ -257,11 +342,18 @@ private final class VoicePool {
         }
     }
 
-    func play(_ buffer: AVAudioPCMBuffer?) {
+    /// Play now, or `delay` seconds from now on the player's own sample clock, so notes
+    /// scheduled ahead land exactly in time whatever the frame rate.
+    func play(_ buffer: AVAudioPCMBuffer?, after delay: Double = 0) {
         guard let buffer else { return }
         let player = players[next]
         next = (next + 1) % players.count
-        player.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
+        var when: AVAudioTime?
+        if delay > 0, let nodeTime = player.lastRenderTime, let now = player.playerTime(forNodeTime: nodeTime) {
+            when = AVAudioTime(sampleTime: now.sampleTime + AVAudioFramePosition(delay * now.sampleRate),
+                               atRate: now.sampleRate)
+        }
+        player.scheduleBuffer(buffer, at: when, options: .interrupts, completionHandler: nil)
     }
 }
 
@@ -270,7 +362,7 @@ private final class VoicePool {
 /// One oscillator note with the JS gain envelope: starts at `gain`, ramps exponentially to 0.001
 /// over `length` (or linearly to 0 for the rotate click), then stops. `at` delays it within the buffer.
 private struct Note {
-    enum Wave { case sine, sawtooth, noise }
+    enum Wave { case sine, triangle, square, sawtooth, noise }
     enum Decay { case exponential, linear }
 
     let wave: Wave, freq: Double, at: Double, length: Double, gain: Double, decay: Decay
@@ -298,6 +390,20 @@ private struct Note {
         switch wave {
         case .sine:
             return sin(2 * .pi * freq * t)
+        case .triangle, .square:
+            // Band-limited odd harmonics up to Nyquist, like Web Audio's
+            var sum = 0.0
+            var k = 1.0
+            while k * freq < sampleRate / 2 {
+                if wave == .square {
+                    sum += sin(2 * .pi * k * freq * t) / k
+                } else {
+                    let sign: Double = Int(k / 2) % 2 == 0 ? 1 : -1
+                    sum += sign * sin(2 * .pi * k * freq * t) / (k * k)
+                }
+                k += 2
+            }
+            return wave == .square ? sum * 4 / .pi : sum * 8 / (.pi * .pi)
         case .noise:
             return Double.random(in: -1...1)
         case .sawtooth:
@@ -336,14 +442,64 @@ private func renderNotes(_ format: AVAudioFormat, _ notes: [Note]) -> AVAudioPCM
     }
 }
 
-/// Drone: 40 Hz sine, vibrato ±2 Hz at `vibratoHz`, gain 0.03, exactly 1 s for a seamless `.loops`.
-/// f(t) = 40 + 2·sin(2πLt)  ⇒  phase(t) = 2π·40·t + (2/L)·(1 − cos 2πLt).
-/// At t = 1 with integer L the FM term is back to 0 and the carrier has done 40 whole cycles,
-/// so the last frame flows into frame 0 with continuous phase.
-private func renderDrone(_ format: AVAudioFormat, vibratoHz: Int) -> AVAudioPCMBuffer? {
-    let lfo = Double(max(vibratoHz, 0))
-    return renderBuffer(format, duration: 1) { t in
-        let vibrato = lfo > 0 ? 2 / lfo * (1 - cos(2 * .pi * lfo * t)) : 0
-        return 0.03 * sin(2 * .pi * 40 * t + vibrato)
+/// Pad chord: soft sines with a quiet octave above, fading in over `Mix.padFade` and out over it
+/// after `length`. The next unit's pad starts as this one fades, so the two crossfade.
+/// With `wobble` its pitch drifts slowly sharp and back, like worn tape.
+private func renderPad(_ format: AVAudioFormat, _ freqs: [Double], length: Double, wobble: Bool) -> AVAudioPCMBuffer? {
+    let fade = Mix.padFade
+    let depth = wobble ? Mix.wobbleDepth : 0, rate = Mix.wobbleRate
+    return renderBuffer(format, duration: length + fade) { t in
+        let envelope = min(1, t / fade, (length + fade - t) / fade)
+        // Time as the tape plays it: the integral of 1 + depth·sin(2π·rate·t)
+        let u = t + depth * (1 - cos(2 * .pi * rate * t)) / (2 * .pi * rate)
+        return Mix.pad * envelope * freqs.reduce(0.0) { $0 + sin(2 * .pi * $1 * u) + 0.2 * sin(4 * .pi * $1 * u) }
+    }
+}
+
+/// One drum hit. A kick is a sine falling from 160 to 70 Hz with a click on top, so phone speakers
+/// still hear it; a snare is noise over a short 185 Hz tone; hats are noise with its lows taken out.
+private func renderDrum(_ format: AVAudioFormat, _ drum: MusicNote.Drum) -> AVAudioPCMBuffer? {
+    switch drum {
+    case .kick:
+        let tau = 0.03, high = 160.0, low = 70.0
+        return renderBuffer(format, duration: 0.3) { t in
+            let phase = 2 * .pi * (low * t + (high - low) * tau * (1 - exp(-t / tau)))
+            let body = (sin(phase) + 0.3 * sin(2 * phase)) * pow(0.001, t / 0.3)
+            let click = Double.random(in: -1...1) * exp(-t / 0.003) * 0.3
+            return Mix.kick * (body + click)
+        }
+    case .snare, .ghost:
+        let gain = drum == .ghost ? Mix.snare * Mix.ghost : Mix.snare
+        let length = drum == .ghost ? 0.1 : 0.18
+        return renderBuffer(format, duration: length) { t in
+            let tone = sin(2 * .pi * 185 * t) * exp(-t / 0.03) * 0.5
+            let noise = Double.random(in: -1...1) * pow(0.001, t / length)
+            return gain * (tone + noise)
+        }
+    case .hat, .accent:
+        let gain = drum == .accent ? Mix.accent : Mix.hat
+        let length = drum == .accent ? 0.06 : 0.035
+        var previous = 0.0
+        return renderBuffer(format, duration: length) { t in
+            // Each sample minus the last: a first-order high-pass
+            let noise = Double.random(in: -1...1)
+            defer { previous = noise }
+            return gain * (noise - previous) * 0.5 * pow(0.001, t / length)
+        }
+    case .crackle:
+        return renderCrackle(format, length: 0.1)
+    }
+}
+
+/// `length` seconds of vinyl: a few soft pops a second over a faint hiss.
+private func renderCrackle(_ format: AVAudioFormat, length: Double) -> AVAudioPCMBuffer? {
+    let chance = 7 / format.sampleRate
+    var pop = 0.0
+    return renderBuffer(format, duration: length) { _ in
+        if Double.random(in: 0..<1) < chance {
+            pop = Double.random(in: 0.2...1) * (Bool.random() ? 1 : -1)
+        }
+        defer { pop *= 0.55 }
+        return Mix.crackle * (pop + 0.05 * Double.random(in: -1...1))
     }
 }

@@ -148,6 +148,33 @@ final class GravityTests: XCTestCase {
         XCTAssertEqual(history[0], layout([(1, -2, 0), (3, 8, 2), (3, 9, 1)]))
     }
 
+    func testHeldPiecesDoNotFallAndReleaseAtTheOldDialPosition() {
+        let held = Set(Grid.dialCells(vertex(6, 0)))
+        var board = makeBoard(held.map { ($0.r, $0.c, 0) })
+        let before = board
+
+        Dropper.stepGravity(&board, heldCells: held)
+        XCTAssertEqual(board, before)
+
+        Dropper.stepGravity(&board)
+        XCTAssertNotEqual(board, before)
+    }
+
+    func testPiecesOutsideTheDialCanFallIntoAnEmptyHeldCell() {
+        let held = Set(Grid.dialCells(vertex(6, 0)))
+        let source = Grid.cells.first { cell in
+            !held.contains(cell)
+                && Dropper.nextMove(makeBoard([(cell.r, cell.c, 0)]), from: cell).map(held.contains) == true
+        }!
+        var board = makeBoard([(source.r, source.c, 0)])
+        let id = board[source]!.id
+        let target = Dropper.nextMove(board, from: source)!
+
+        Dropper.stepGravity(&board, heldCells: held)
+
+        XCTAssertEqual(board[target]?.id, id)
+    }
+
     func testClearingPiecesDoNotFall() {
         var board = makeBoard([(6, -11, 0)])
         board[cell(6, -11)]?.clearTime = 0.3
@@ -293,6 +320,17 @@ final class HexDetectionTests: XCTestCase {
         // JS: the same shape at (6,8) is floating
         let board = makeBoard(Grid.dialCells(vertex(6, 8)).map { ($0.r, $0.c, 0) })
         XCTAssertEqual(Dial.findHexes(board), [])
+    }
+
+    func testFindsMatchingFloatingHexWhenItsCellsAreHeld() {
+        let center = vertex(6, 8)
+        let held = Set(Grid.dialCells(center))
+        let board = makeBoard(held.map { ($0.r, $0.c, 0) })
+
+        XCTAssertEqual(
+            Dial.findHexes(board, heldCells: held),
+            [Hex(center: center, color: 0, cells: Grid.dialCells(center))]
+        )
     }
 
     func testIgnoresClearingPieces() {
