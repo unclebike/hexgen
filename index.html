@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#18181A">
   <link rel="manifest" href="manifest.json">
   <title>Dialhex</title>
+  <link rel="stylesheet" href="ui.css">
   <link rel="preload" href="skins.json" as="fetch" crossorigin>
   <link rel="preload" href="fonts/DialhexArchivoExpanded-ExtraBold.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/DialhexArchivoExpanded-Medium.woff2" as="font" type="font/woff2" crossorigin>
@@ -63,7 +64,10 @@
 </head>
 <body>
   <div id="loading"><span>loading</span></div>
-  <canvas id="gameCanvas"></canvas>
+  <canvas id="gameCanvas" aria-label="the bin"></canvas>
+  <div id="ui"></div>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div id="announce" role="status" aria-live="polite"></div>
   <script type="module">
     import './main.js';
     // main.js waits for skins.json and the fonts, so this runs once they're ready

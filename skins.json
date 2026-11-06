@@ -34,6 +34,41 @@
       "endless": { "label": "ENDLESS", "detail": "no end" },
       "sprint": { "label": "SPRINT", "detail": "3 minutes" }
     },
+    "daily": {
+      "_about": "The app's Daily Dial: a three-minute sprint, the same for everyone each UTC day, with one or two modifiers found nowhere else. The menu button shows the day's modifiers (joined by and), the day's best, and the streak. In play the modifiers sit under the timer. A paused daily hides its board and counts back in. %d and %@ fill in.",
+      "label": "DAILY",
+      "detail": "today: %@",
+      "and": " + ",
+      "streak": "%d-day streak",
+      "best": "best %d",
+      "firstTry": "first try.",
+      "firstTryScore": "first try %d",
+      "unkept": "your clock is behind a daily you've played, so this one isn't kept.",
+      "next": "next",
+      "counting": "back in %d",
+      "introTitle": "today's daily.",
+      "introBody": "a three-minute sprint, the same for everyone until midnight UTC. play it as often as you like: your first try and your best both count.",
+      "introPoints": [
+        "everyone gets the same triangles, in the same order.",
+        "the next three show under the clock.",
+        "pausing hides the board, then counts you back in."
+      ],
+      "start": "START",
+      "back": "BACK",
+      "leaderboard": "LEADERBOARD",
+      "helps": "helps",
+      "twists": "twists",
+      "modifiers": {
+        "overtime": { "title": "overtime.", "detail": "each hex adds 3 seconds, up to a minute more." },
+        "downpour": { "title": "downpour.", "detail": "triangles arrive two at a time, half as often." },
+        "powerSurge": { "title": "power surge.", "detail": "glowing triangles come five times as often." },
+        "junkyard": { "title": "junkyard.", "detail": "you start on a pile of every colour." },
+        "wanted": { "title": "wanted.", "detail": "the marked colour scores triple, until you clear it." },
+        "comboFever": { "title": "combo fever.", "detail": "hexes cleared together score more each." },
+        "oneWay": { "title": "one way.", "detail": "the dial only turns clockwise." },
+        "fullSpectrum": { "title": "full spectrum.", "detail": "all eight colours from the start." }
+      }
+    },
     "best": "best",
     "hexes": "hexes",
     "skin": "SKIN",
@@ -42,7 +77,38 @@
       "levels": { "slow": "SLOW", "normal": "NORMAL", "fast": "FAST" },
       "hints": { "slow": "half points", "normal": "full points", "fast": "one and a half times the points" }
     },
+    "board": {
+      "_about": "The menu's board-size tile (iOS and tvOS). The big board has fewer, larger triangles, works up to six colours, and keeps its own bests off the leaderboards.",
+      "label": "BOARD",
+      "levels": { "standard": "REGULAR", "big": "BIG" },
+      "hints": { "standard": "the full-size bin", "big": "bigger triangles, six colours, its own best scores" },
+      "mainDetail": "all 6 colours"
+    },
+    "setup": {
+      "_about": "The menu's play-setup tile and the card it opens: speed and board size over a live preview bin.",
+      "title": "SETUP",
+      "detail": "speed and board size, with a preview",
+      "colours": "%d colours",
+      "ownBests": "its own best scores",
+      "done": "DONE"
+    },
+    "shortcuts": {
+      "_about": "iPhone only: the menu tiles' long-press menus. A mode tile starts at a chosen speed (play takes the speed's name) or opens its leaderboard; the skin tile jumps to an open skin; the setup tile holds speed, board, hand and sound.",
+      "play": "PLAY %@",
+      "leaderboard": "LEADERBOARD",
+      "skins": "SKINS",
+      "sound": "SOUND"
+    },
     "locked": "locked",
+    "skinLock": {
+      "_about": "Under the menu while a locked skin is previewed: what opens it, by wins alone or hexes alone.",
+      "label": "LOCKED",
+      "win": "win a SPECTRUM game",
+      "wins": "win %d SPECTRUM games",
+      "hexes": "clear %d more hexes",
+      "or": " or ",
+      "playing": "you'll play in %@ until then"
+    },
     "paused": "paused.",
     "resume": "RESUME",
     "leftHanded": "LEFT-HANDED",
@@ -53,11 +119,36 @@
     "timeUp": "time.",
     "newBest": "new best.",
     "unlocked": "new skin: %@.",
+    "appIcon": {
+      "_about": "iPhone only: a newly opened skin offers its home screen icon on the game-over card (use, then set once it's on), and the menu's skin tile offers it on a long press (use), or the original back (reset).",
+      "use": "USE AS APP ICON",
+      "set": "APP ICON SET",
+      "reset": "USE ORIGINAL APP ICON"
+    },
     "walkthrough": {
-      "_about": "The app's first game opens with the bot playing until it clears a few hexes, then handing over. takeOver fills in the input's {confirm}.",
+      "_about": "The app's first launch goes into a one-minute learning round (label), opening on a start card (introTitle, introBody, start, skip). The bot plays its first seconds, then hands over. Its captions stay short (about 32 characters, one idea each, never a 'don't') and follow what's on screen, in order: pile under a slowed close-up of a triangle landing; hex under the bot's first hex, in a mid-game bin with every colour; turn as it pulls back (on touch, drag and spin instead, as a ghost finger acts out each move; other inputs get the controls line under turn). After the glow, the bin fills most of the way (filling) and the player keeps it from overflowing (makeRoom); if it overflows, over. After the player's first hex, swap names the bot's glow demo, or swap or drain names a glow the player fired. done, doneBody, and recommend close the round, which offers every mode with a sprint first.",
       "watch": "watch: six of one colour under the dial clears a hex.",
       "takeOver": "{confirm} or move to take over",
-      "yourTurn": "your turn."
+      "label": "LESSON",
+      "introTitle": "learn to play.",
+      "introBody": "a one-minute lesson, then it's yours.",
+      "start": "START",
+      "skip": "SKIP",
+      "hex": "six of one colour makes a hex.",
+      "turn": "turn the dial to match colours.",
+      "drag": "drag to move the dial.",
+      "spin": "spin the wheel to turn the dial.",
+      "pile": "triangles land and pile up.",
+      "yourTurn": "your turn.",
+      "swap": "glowing triangles swap colours.",
+      "drain": "glowing triangles empty the bottom.",
+      "filling": "the bin is filling up…",
+      "makeRoom": "clear hexes to make room.",
+      "over": "a full bin ends the game.",
+      "done": "that's the game.",
+      "doneBody": "real games start with a few colours and add more as you clear hexes.",
+      "recommend": "try a sprint first: three minutes, as many hexes as you can.",
+      "or": "or"
     },
     "callouts": {
       "_about": "The app's in-play callouts: one quiet line beside the bin when play shifts, never over it. detail explains it the first few times it shows. {level}, {points}, and {seconds} fill in.",
@@ -65,7 +156,7 @@
       "levelUp": { "title": "level {level}.", "detail": "a new colour joins. every hex now scores {points}." },
       "drain": { "title": "drain.", "detail": "the glowing piece emptied the bottom two rows." },
       "swap": { "title": "swap.", "detail": "the glowing piece turned one colour into another." },
-      "hint": { "title": "one turn away.", "detail": "the faint outline marks a hex you can finish with a single turn." },
+      "hint": { "title": "one turn away.", "detail": "the pulsing outline marks a hex you can finish with a single turn." },
       "glow": { "title": "a glowing piece.", "detail": "clear it in a hex to fire its power." },
       "held": { "title": "held.", "detail": "nothing falls under the dial. park a piece there." },
       "danger": { "title": "bin filling.", "detail": "the music holds its breath until you clear space." },
@@ -86,6 +177,7 @@
     "versus": {
       "label": "VERSUS",
       "detail": "2–4 players, or 2 in co-op",
+      "short": "2–4 players",
       "title": "versus.",
       "join": "press {confirm} to join",
       "ready": "ready",
@@ -117,8 +209,11 @@
     "online": {
       "label": "ONLINE",
       "detail": "co-op with a Game Center friend",
+      "short": "co-op",
       "signedOut": "sign in to Game Center first",
+      "shortSignedOut": "sign in first",
       "restricted": "multiplayer is turned off",
+      "shortRestricted": "turned off",
       "title": "online.",
       "you": "you",
       "friend": "a friend",
@@ -164,27 +259,84 @@
       "tvNeedsUpdate": "needs iOS 26 or later",
       "back": "BACK"
     },
+    "leaderboards": {
+      "label": "LEADERBOARDS",
+      "short": "SCORES",
+      "detail": "Game Center leaderboards"
+    },
     "howTo": {
+      "_about": "The app's rules page, in tabs by what a player came for: basics to start playing (with the lesson), scoring to do better, modes to choose a game (each mode's menu symbol beside it, then the daily's modifiers), and controls (one rule per input, the one in hand first). Each rule names its section and its drawing (art: a HowToArt drawing, a mode or menu symbol, or an input's symbol). only limits a rule to ios or tvos; input names the InputKind a controls rule is for. keys is a rule's table: an action, then what does it, per column (columns names them; one column needs no name). A key that starts sf: is an SF Symbol, with its spoken name after |. {confirm}, {cancel}, {sides} fill in for the input in hand. lead is a tab's one line under its name.",
       "label": "HOW TO PLAY",
       "short": "RULES",
       "detail": "the rules",
       "title": "how to play.",
+      "done": "DONE",
       "back": "BACK",
+      "sections": [
+        { "id": "basics", "label": "BASICS", "lead": "new here? these three are the whole game." },
+        { "id": "scoring", "label": "SCORING", "lead": "how points add up, and how to get more." },
+        { "id": "modes", "label": "MODES", "lead": "what each game asks of you." },
+        { "id": "controls", "label": "CONTROLS", "lead": "every mode plays with the same controls. the ones in your hand come first." }
+      ],
       "rules": [
-        { "art": "bin", "title": "the bin.", "body": "triangles fall into the bin. when there's no room for the next one, the game is over." },
-        { "art": "dial", "title": "the dial.", "body": "the dial covers six triangles. turn it to spin them around its centre. gravity stops under the dial, so it can hold pieces in place." },
-        { "art": "hex", "title": "hexes.", "body": "fill all six triangles under a dial with one colour and the hex clears. every hex scores 100 × your level." },
-        { "art": "levels", "title": "levels.", "body": "every 6 hexes adds a new colour, and triangles arrive faster." },
-        { "art": "glow", "title": "glowing pieces.", "body": "clear a glowing triangle to fire its power. drain empties the bottom two rows; swap turns one colour into another." },
-        { "art": "modes", "title": "modes.", "body": "SPECTRUM: six hexes of all 8 colours wins. ENDLESS: play until the bin fills. SPRINT: as many hexes as you can in 3 minutes." },
-        { "art": "touch", "title": "touch.", "body": "tap a spot to grab it, tap again to turn. twist two fingers on the board to turn either way." }
+        { "section": "basics", "art": "bin", "title": "the bin.", "body": "triangles fall into the bin. when there's no room for the next one, the game is over." },
+        { "section": "basics", "art": "dial", "title": "the dial.", "body": "the dial covers six triangles. turn it to spin them around its centre. gravity stops under the dial, so it can hold pieces in place." },
+        { "section": "basics", "art": "hex", "title": "hexes.", "body": "six triangles of one colour around a point make a hex, and it clears, wherever it is in the bin." },
+        { "section": "scoring", "art": "hex", "title": "points.", "body": "every hex scores 100 × your level. clear several at once and each one counts." },
+        { "section": "scoring", "art": "levels", "title": "levels.", "body": "your level is the number of colours in play. every 6 hexes adds one, up to 8, and triangles arrive faster, so each new colour makes every hex worth 100 more." },
+        { "section": "scoring", "art": "speed", "title": "speed.", "body": "SLOW scores half points and FAST one and a half times. choose it in SETUP. the daily and versus always play at normal speed." },
+        { "section": "scoring", "art": "glow", "title": "glowing pieces.", "body": "clear a glowing triangle in a hex to fire its power. drain empties the bottom two rows; swap turns one colour into another." },
+        { "section": "modes", "art": "main", "title": "SPECTRUM.", "body": "start with 3 colours and gain one every 4 hexes. clear 48 hexes, in any colours, to win." },
+        { "section": "modes", "art": "endless", "title": "ENDLESS.", "body": "start with 2 colours and play until the bin fills." },
+        { "section": "modes", "art": "sprint", "title": "SPRINT.", "body": "score as much as you can in 3 minutes." },
+        { "section": "modes", "art": "daily", "title": "DAILY.", "body": "a sprint that's the same for everyone today, with one of these rule changes, or a help and a twist together." },
+        { "section": "modes", "art": "versus", "only": "tvos", "title": "VERSUS.", "body": "2 to 4 players, a bin each, the same triangles for everyone. SPRINT RACE is the best score in 3 minutes, SURVIVAL the last bin standing, FIRST TO WIN the first to finish SPECTRUM." },
+        { "section": "modes", "art": "online", "title": "CO-OP.", "body": "two players, one bin, one score, a dial each. the dials can't overlap. play it with a Game Center friend from ONLINE, or as CO-OP in the VERSUS lobby on Apple TV." },
+        { "section": "modes", "art": "board", "title": "big board.", "body": "a SETUP choice for playing alone: bigger triangles and 6 colours, so SPECTRUM is won at 36 hexes. it keeps its own best scores." },
+        { "section": "controls", "art": "touch", "only": "ios", "input": "touch", "title": "touch.", "body": "the wheel beside the bin spins either way, and so does a two-finger twist on the board.", "keys": [
+          { "action": "move", "keys": [["tap a spot", "drag"]] },
+          { "action": "turn", "keys": [["tap the dial", "tap the wheel"]] },
+          { "action": "turn back", "keys": [["spin the wheel back", "twist"]] },
+          { "action": "pause", "keys": [["sf:pause|the pause button"]] }
+        ] },
+        { "section": "controls", "art": "gamepad", "input": "gamepad", "title": "controller.", "body": "Xbox, PlayStation and other controllers. the left stick moves like the d-pad. paused, A or cross plays on and B or circle goes to the menu.", "columns": ["XBOX", "PLAYSTATION"], "keys": [
+            { "action": "move", "keys": [["sf:dpad|d-pad", "sf:l.joystick|left stick"], ["sf:dpad|d-pad", "sf:l.joystick|left stick"]] },
+            { "action": "turn", "keys": [["sf:a.circle|A", "sf:y.circle|Y", "sf:rb.rectangle.roundedbottom|RB", "sf:rt.rectangle.roundedtop|RT"], ["sf:xmark.circle|cross", "sf:triangle.circle|triangle", "sf:r1.rectangle.roundedbottom|R1", "sf:r2.rectangle.roundedtop|R2"]] },
+            { "action": "turn back", "keys": [["sf:x.circle|X", "sf:lb.rectangle.roundedbottom|LB", "sf:lt.rectangle.roundedtop|LT"], ["sf:square.circle|square", "sf:l1.rectangle.roundedbottom|L1", "sf:l2.rectangle.roundedtop|L2"]] },
+            { "action": "pause", "keys": [["sf:line.3.horizontal.circle|menu", "sf:b.circle|B", "sf:rectangle.on.rectangle.circle|view"], ["OPTIONS", "sf:circle.circle|circle", "SHARE"]] },
+            { "action": "pick", "keys": [["sf:a.circle|A"], ["sf:xmark.circle|cross"]] },
+            { "action": "back", "keys": [["sf:b.circle|B"], ["sf:circle.circle|circle"]] }
+        ] },
+        { "section": "controls", "art": "remote", "only": "tvos", "input": "remote", "title": "remote.", "body": "paused, click plays on and back goes to the menu.", "keys": [
+          { "action": "move", "keys": [["swipe", "click the edge"]] },
+          { "action": "turn", "keys": [["click"]] },
+          { "action": "turn back", "keys": [["sf:playpause|play pause"]] },
+          { "action": "pause", "keys": [["back"]] }
+        ] },
+        { "section": "controls", "art": "phone", "only": "tvos", "input": "phone", "title": "phone.", "body": "open Hexgen on an iPhone, choose CONNECT and enter the code on the menu. the phone becomes a controller.", "keys": [
+          { "action": "move", "keys": [["touch the little bin"]] },
+          { "action": "turn", "keys": [["tap the hex", "spin it"]] },
+          { "action": "turn back", "keys": [["spin the hex back"]] },
+          { "action": "pause", "keys": [["sf:pause|the pause button"]] },
+          { "action": "pick", "keys": [["A"]] },
+          { "action": "back", "keys": [["B"]] }
+        ] },
+        { "section": "controls", "art": "keyboard", "input": "keyboard", "title": "keyboard.", "body": "paused, space or return plays on and esc goes to the menu.", "keys": [
+          { "action": "move", "keys": [["W A S D", "arrows"]] },
+          { "action": "turn", "keys": [["E", "X", "return"]] },
+          { "action": "turn back", "keys": [["Q", "Z"]] },
+          { "action": "pause", "keys": [["space", "esc"]] },
+          { "action": "start", "keys": [["1 SPECTRUM", "2 ENDLESS", "3 SPRINT"]] },
+          { "action": "skin", "keys": [["K"]] }
+        ] },
+        { "section": "controls", "art": "versus", "only": "tvos", "title": "playing together.", "body": "in VERSUS, every controller, remote, keyboard and phone is a player of its own, with its own controls. {confirm} joins, {sides} picks the game, {confirm} again starts, and {cancel} leaves." }
       ]
     }
   },
 
   "unlocks": {
     "_about": "Every MAIN win and every lifetime-hexes milestone unlocks the next skin, in list order.",
-    "milestones": [50, 150, 300, 600, 1000]
+    "milestones": [50, 150, 300, 600, 1000, 1600]
   },
 
   "skins": [
@@ -264,6 +416,36 @@
         "tints": [0, -0.5, 0.6, -0.3, 0.85, -0.65, 0.3, -0.4]
       },
       "sound": { "wave": "square", "octave": 1, "drone": true }
+    },
+    {
+      "id": "catppuccin",
+      "background": "#1E1E2E",
+      "empty": "#313244",
+      "ink": "#CDD6F4",
+      "mark": "#1E1E2E",
+      "pieces": ["#F9E2AF", "#89B4FA", "#FAB387", "#F5E0DC", "#94E2D5", "#CBA6F7", "#F5C2E7", "#A6E3A1"],
+      "fonts": { "display": "DialhexArchivoExpanded-ExtraBold", "text": "DialhexArchivoExpanded-Medium", "digits": "DialhexJetBrainsMono-Bold" },
+      "stroke": {},
+      "effects": {},
+      "sound": { "wave": "sine", "octave": 0, "drone": true },
+      "timedPalettes": {
+        "dayStartsAt": 7,
+        "nightStartsAt": 19,
+        "day": {
+          "background": "#EFF1F5",
+          "empty": "#CCD0DA",
+          "ink": "#4C4F69",
+          "mark": "#EFF1F5",
+          "pieces": ["#DF8E1D", "#1E66F5", "#FE640B", "#DC8A78", "#179299", "#8839EF", "#EA76CB", "#40A02B"]
+        },
+        "night": {
+          "background": "#1E1E2E",
+          "empty": "#313244",
+          "ink": "#CDD6F4",
+          "mark": "#1E1E2E",
+          "pieces": ["#F9E2AF", "#89B4FA", "#FAB387", "#F5E0DC", "#94E2D5", "#CBA6F7", "#F5C2E7", "#A6E3A1"]
+        }
+      }
     }
   ]
 }
