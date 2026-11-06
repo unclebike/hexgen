@@ -6,6 +6,7 @@
 const SKIN_KEY = 'dialhex_skin';
 const PROGRESS_KEY = 'dialhex_progress';
 const HARD_CUT_GAP = 1000 / 3; // ms; never flash more than three times a second
+export const SECONDARY = 0.6;  // opacity of secondary text; still the one ink colour
 
 let tokens = null;
 let base = null;    // the active skin as written in skins.json
@@ -112,9 +113,18 @@ function applySkin(next) {
     sound: next.sound,
   });
   applyStrobe();
-  storageSet(SKIN_KEY, next.id);
+  if (!skinLocked()) storageSet(SKIN_KEY, next.id); // a locked skin is only a preview
   document.body.style.background = next.background;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next.background);
+  const css = document.documentElement.style;
+  css.setProperty('--bg', next.background);
+  css.setProperty('--bg-rgb', channels(next.background).join(', '));
+  css.setProperty('--empty', next.empty);
+  css.setProperty('--empty-rgb', channels(next.empty).join(', '));
+  css.setProperty('--font-display', `"${next.fonts.display}"`);
+  css.setProperty('--font-text', `"${next.fonts.text}"`);
+  css.setProperty('--font-digits', `"${next.fonts.digits}"`);
+  css.setProperty('--font-scale', next.fontScale || 1);
 }
 
 /** Single-hue skins derive ink and pieces from the current strobe colour. */
@@ -128,6 +138,9 @@ function applyStrobe() {
     skin.ink = base.ink;
     skin.pieces = base.pieces;
   }
+  const css = document.documentElement.style;
+  css.setProperty('--ink', skin.ink);
+  css.setProperty('--ink-rgb', channels(skin.ink).join(', '));
 }
 
 /**
@@ -196,16 +209,54 @@ export function unlockAll() {
   storageSet(PROGRESS_KEY, JSON.stringify(progress));
 }
 
-/** Switch to the next unlocked skin, wrapping around. */
+/** Switch to the next skin, wrapping around. Locked skins can be previewed; a game uses an open one. */
 export function cycleSkin() {
-  const unlocked = unlockedSkins();
-  const i = unlocked.findIndex(s => s.id === skin.id);
-  applySkin(unlocked[(i + 1) % unlocked.length]);
+  const all = tokens.skins;
+  const i = all.findIndex(s => s.id === skin.id);
+  applySkin(all[(i + 1) % all.length]);
 }
 
-/** Where the active skin sits in the unlocked list, 1-based. */
-export function skinPosition() {
-  return unlockedSkins().findIndex(s => s.id === skin.id) + 1;
+/** Put on a skin by id, if it's open. */
+export function selectSkin(id) {
+  const next = unlockedSkins().find(s => s.id === id);
+  if (next) applySkin(next);
+}
+
+const skinIndex = () => tokens.skins.findIndex(s => s.id === skin.id);
+
+/** Whether the active skin is only being previewed. */
+export function skinLocked() {
+  return skinIndex() >= unlockedCount();
+}
+
+/**
+ * What the previewed skin still takes, by either road on its own: { wins, hexes },
+ * where hexes is null if hexes alone never can. Null if it's open.
+ */
+export function skinRequirement() {
+  const index = skinIndex();
+  if (index < unlockedCount()) return null;
+  const progress = loadProgress();
+  const milestones = [...tokens.unlocks.milestones].sort((a, b) => a - b);
+  const reached = milestones.filter(m => progress.hexes >= m).length;
+  // Open once wins and milestones reached add up to the skin's index
+  const milestone = index - progress.mainWins;
+  return {
+    wins: index - progress.mainWins - reached,
+    hexes: milestone >= 1 && milestone <= milestones.length ? milestones[milestone - 1] - progress.hexes : null,
+  };
+}
+
+/** The open skin a game would use: the saved one, or the first. */
+export function playableSkinId() {
+  if (!skinLocked()) return skin.id;
+  const unlocked = unlockedSkins();
+  return (unlocked.find(s => s.id === storageGet(SKIN_KEY)) || unlocked[0]).id;
+}
+
+/** Before a game: step out of a locked preview into the open skin. */
+export function wearPlayableSkin() {
+  if (skinLocked()) selectSkin(playableSkinId());
 }
 
 function storageGet(k) {

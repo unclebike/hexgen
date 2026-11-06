@@ -7,6 +7,9 @@ import { skin } from './skins.js';
 let audioCtx = null;
 let masterGain = null;
 let muted = false;
+try {
+  muted = localStorage.getItem('dialhex_muted') === 'true';
+} catch (e) { /* storage unavailable */ }
 let droneOsc = null;
 let droneLfo = null;
 
@@ -47,12 +50,6 @@ export function initAudio() {
     masterGain = audioCtx.createGain();
     masterGain.gain.value = muted ? 0 : 0.5;
     masterGain.connect(audioCtx.destination);
-
-    // Load mute preference
-    try {
-      muted = localStorage.getItem('dialhex_muted') === 'true';
-      masterGain.gain.value = muted ? 0 : 0.5;
-    } catch (e) {}
   } catch (e) {
     // Web Audio not available — silent mode
     audioCtx = null;
