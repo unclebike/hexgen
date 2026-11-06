@@ -127,6 +127,8 @@
     },
     "walkthrough": {
       "_about": "The app's first launch goes into a one-minute learning round (label), opening on a start card (introTitle, introBody, start, skip). The bot plays its first seconds, then hands over. Its captions stay short (about 32 characters, one idea each, never a 'don't') and follow what's on screen, in order: pile under a slowed close-up of a triangle landing; hex under the bot's first hex, in a mid-game bin with every colour; turn as it pulls back (on touch, drag and spin instead, as a ghost finger acts out each move; other inputs get the controls line under turn). After the glow, the bin fills most of the way (filling) and the player keeps it from overflowing (makeRoom); if it overflows, over. After the player's first hex, swap names the bot's glow demo, or swap or drain names a glow the player fired. done, doneBody, and recommend close the round, which offers every mode with a sprint first.",
+      "watch": "watch: six of one colour under the dial clears a hex.",
+      "takeOver": "{confirm} or move to take over",
       "label": "LESSON",
       "introTitle": "learn to play.",
       "introBody": "a one-minute lesson, then it's yours.",
@@ -269,6 +271,7 @@
       "detail": "the rules",
       "title": "how to play.",
       "done": "DONE",
+      "back": "BACK",
       "sections": [
         { "id": "basics", "label": "BASICS", "lead": "new here? these three are the whole game." },
         { "id": "scoring", "label": "SCORING", "lead": "how points add up, and how to get more." },

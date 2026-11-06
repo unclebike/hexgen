@@ -185,6 +185,8 @@ export function initInput(canvas) {
     lastKind = 'keyboard';
     const event = keyMap[e.code];
     if (!event || !inputActive) return;
+    // A focused button, such as the pause menu's, takes its own activation keys
+    if ((event.type === 'pause' || event.type === 'confirm') && e.target.closest?.('button')) return;
     e.preventDefault();
     if (event.type === 'rotate') pushRotate(event.dir);
     else push(event);
